@@ -39,3 +39,6 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0
 	-	Implementation: Nodes listen for 'HEARTBEAT' messages from the leader. If received, the 'WANT_TO_JOIN' message is rebroadcast.
 	-	Code Location: handle_message and attempt_join methods in the Node class.
 
+## Things to improve for Bharat Puri 31.12.24
+1. Initialiation of send and receive options at a central place (_inti_)
+2. Only one class for Node in jupyter file and dynamic_discovery_of_host.py file.
