@@ -1,5 +1,16 @@
+import threading
+import time
+
 import ui.name_input
 import ui.leader_yn
+import ui.chat_ui
+
+def generate_events(chat_ui):
+    counter = 1
+    while True:
+        chat_ui.add_event(f"This is event {counter}!")
+        counter += 1
+        time.sleep(0.5)
 
 if __name__ == "__main__":
     # TODO: Integrate the username querying into a single UI system
@@ -12,3 +23,8 @@ if __name__ == "__main__":
     is_leader = ui.leader_yn.leader_yes_no()
     if is_leader is None:
         exit()
+
+    chat_ui = ui.chat_ui.ChatUI()
+    event_generator = threading.Thread(target=generate_events, args=(chat_ui,), daemon=True)
+    event_generator.start()
+    chat_ui.start()
