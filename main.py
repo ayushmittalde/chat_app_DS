@@ -12,6 +12,13 @@ def generate_events(chat_ui):
         counter += 1
         time.sleep(0.5)
 
+def generate_messages(chat_ui):
+    counter = 1
+    while True:
+        chat_ui.deliver_message("Booper", "BOOP")
+        counter += 1
+        time.sleep(3.3)
+
 if __name__ == "__main__":
     # TODO: Integrate the username querying into a single UI system
     # Query the user for an user name
@@ -24,7 +31,9 @@ if __name__ == "__main__":
     if is_leader is None:
         exit()
 
-    chat_ui = ui.chat_ui.ChatUI()
+    chat_ui = ui.chat_ui.ChatUI(lambda x: chat_ui.deliver_message("You", x))
     event_generator = threading.Thread(target=generate_events, args=(chat_ui,), daemon=True)
     event_generator.start()
+    chat_generator = threading.Thread(target=generate_messages, args=(chat_ui,), daemon=True)
+    chat_generator.start()
     chat_ui.start()
