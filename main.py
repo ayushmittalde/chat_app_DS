@@ -3,7 +3,12 @@ import time
 
 import ui.name_input
 import ui.leader_yn
-import ui.chat_ui
+from layers.application_layer import ApplicationLayer
+from layers.community_layer import CommunityLayer
+from layers.identity_layer import IdentityLayer
+from layers.ordering_layer import OrderingLayer
+from layers.reliability_layer import ReliabilityLayer
+from layers.ui_layer import UILayer
 
 def generate_events(chat_ui):
     counter = 1
@@ -31,9 +36,28 @@ if __name__ == "__main__":
     if is_leader is None:
         exit()
 
-    chat_ui = ui.chat_ui.ChatUI(lambda x: chat_ui.deliver_message("You", x))
-    event_generator = threading.Thread(target=generate_events, args=(chat_ui,), daemon=True)
+    # Create the layers of our architecture
+    ui_layer = UILayer(lambda x: ui_layer.deliver_message("You", x))
+    application_layer = ApplicationLayer()
+    ordering_layer = OrderingLayer()
+    community_layer = CommunityLayer()
+    reliability_layer = ReliabilityLayer()
+    identity_layer = IdentityLayer()
+
+    # Wire up the layers
+    ui_layer.set_application_layer(application_layer)
+    application_layer.set_ui_layer(ui_layer)
+    application_layer.set_ordering_layer(ordering_layer)
+    ordering_layer.set_application_layer(application_layer)
+    ordering_layer.set_community_layer(community_layer)
+    community_layer.set_ordering_layer(ordering_layer)
+    community_layer.set_reliablity_layer(reliability_layer)
+    reliability_layer.set_community_layer(community_layer)
+    reliability_layer.set_identity_layer(identity_layer)
+    identity_layer.set_reliability_layer(reliability_layer)
+
+    event_generator = threading.Thread(target=generate_events, args=(ui_layer,), daemon=True)
     event_generator.start()
-    chat_generator = threading.Thread(target=generate_messages, args=(chat_ui,), daemon=True)
+    chat_generator = threading.Thread(target=generate_messages, args=(ui_layer,), daemon=True)
     chat_generator.start()
-    chat_ui.start()
+    ui_layer.start()
