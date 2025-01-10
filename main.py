@@ -13,7 +13,7 @@ from layers.ui_layer import UILayer
 def generate_events(chat_ui):
     counter = 1
     while True:
-        chat_ui.add_event(f"This is event {counter}!")
+        chat_ui.log_event(f"This is event {counter}!")
         counter += 1
         time.sleep(0.5)
 

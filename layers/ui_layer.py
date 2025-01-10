@@ -56,7 +56,7 @@ class UILayer:
                 self.ui_message_input.set_edit_text("")
                 self.send_message(message)
     
-    def add_event(self, event_message: str):
+    def log_event(self, event_message: str):
         """Add this message to the UI's event log"""
         self.event_log.append("$ " + event_message + "\n")
         self.ui_events_text.set_text(list(reversed(self.event_log)))
@@ -77,6 +77,7 @@ class UILayer:
         self.main_loop.set_alarm_in(FRAME_UPDATE_INTERVAL, self._refresh_screen_loop)
         
     def start(self):
+        self.application_layer.init()
         self.main_loop = urwid.MainLoop(self.ui_frame, self.palette, unhandled_input=self._unhandled)
         self.main_loop.set_alarm_in(FRAME_UPDATE_INTERVAL, self._refresh_screen_loop)
         self.main_loop.run()
