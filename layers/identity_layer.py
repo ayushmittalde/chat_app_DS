@@ -10,3 +10,9 @@ class IdentityLayer:
         
     def _log_event(self, event_message: str):
         self.reliability_layer.log_event(event_message)
+
+    def multicast(self, payload: str):
+        raise NotImplementedError()
+    
+    def unicast(self, payload: str, destination: tuple[str,int]):
+        raise NotImplementedError()

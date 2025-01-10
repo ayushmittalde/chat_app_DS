@@ -40,7 +40,7 @@ if __name__ == "__main__":
     ui_layer = UILayer(lambda x: ui_layer.deliver_message("You", x))
     application_layer = ApplicationLayer()
     ordering_layer = OrderingLayer()
-    community_layer = CommunityLayer()
+    community_layer = CommunityLayer(username, is_leader)
     reliability_layer = ReliabilityLayer()
     identity_layer = IdentityLayer()
 
