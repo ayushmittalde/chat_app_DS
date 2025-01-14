@@ -1,4 +1,13 @@
+import json
+"""
+No encoding in reliability layer yet
+"""
 class ReliabilityLayer:
+    def handle_message(self, message, addr):
+         self.community_layer.handle_message(message, addr)
+
+    def send_response(self,response):
+        self.identity_layer.broadcast_message(response)
 
     def set_community_layer(self, community_layer):
         from .community_layer import CommunityLayer
