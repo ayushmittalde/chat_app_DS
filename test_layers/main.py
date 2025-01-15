@@ -41,11 +41,13 @@ if __name__ == "__main__":
     if(is_leader):
         identity_layer.is_leader=True
         listener_thread = threading.Thread(target=identity_layer.multicast_listen, daemon=False)
+        community_layer.start_heartbeat()
         listener_thread.start()
         listener_thread.join()
     else:
         listener_thread = threading.Thread(target=identity_layer.multicast_listen, daemon=False)
         listener_thread.start()
+        community_layer.start_heartbeat()
         community_layer.attempt_join()
         listener_thread.join()
 

@@ -2,7 +2,7 @@ from config import shared_data_instance
 import uuid
 import socket
 import random
-
+import json
 
 """
 To do : 
@@ -49,25 +49,41 @@ class IdentityLayer:
     def multicast_listen(self):
         print("Listening to multicast messages...") #
         self._log_event("Listening to multicast messages...")
-        print(self.is_leader)
         while True:
-            try:
-                data, addr = self.sock.recvfrom(1024)
-                self.reliability_layer.handle_message(data.decode(), addr)
-            except Exception as e:
-                print(f"Error receiving multicast message: {e}")    #
-                self._log_event(f"Error receiving multicast message: {e}")
+            
+            data, addr = self.sock.recvfrom(1024)
+            self.handle_message(data.decode(), addr)
 
     def broadcast_message(self, message):
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-                sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-                sock.bind(('', self.port))
-                sock.sendto(message.encode(), (self.multicast_address, self.multicast_port))
-                sock.close()
-            except Exception as e:
-                print(f"Error broadcasting message: {e}")
-                self._log_event(f"Error broadcasting message: {e}")
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+            sock.bind(('', self.port))
+            sock.sendto(message.encode(), (self.multicast_address, self.multicast_port))
+            sock.close()
+
+    def send_message(self,message):
+        msg = {
+                "identity_type": "MESSAGE",
+                "peer_uuid": str(self.uuid),
+                "payload":message
+                }
+        self.broadcast_message(json.dumps(msg))
+
+    def broadcast_heartbeat(self,message):
+        beat = {
+                "identity_type": "HEARTBEAT",
+                "peer_uuid": str(self.uuid),
+                "payload":message
+                }
+        self.broadcast_message(json.dumps(beat))
+
+    def handle_message(self,message, addr):
+        data=json.loads(message)
+        if((data["identity_type"]=="HEARTBEAT") and (self.is_leader == False) ):
+            pass
+        else :
+            self.reliability_layer.handle_message(data["payload"], addr)
+
     
     def set_reliability_layer(self, reliability_layer):
         from .reliability_layer import ReliabilityLayer

@@ -7,7 +7,10 @@ class ReliabilityLayer:
          self.community_layer.handle_message(message, addr)
 
     def send_response(self,response):
-        self.identity_layer.broadcast_message(response)
+        self.identity_layer.send_message(response)
+
+    def send_heartbeat(self,response):
+        self.identity_layer.broadcast_heartbeat(response)
 
     def set_community_layer(self, community_layer):
         from .community_layer import CommunityLayer
