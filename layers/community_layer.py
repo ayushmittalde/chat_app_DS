@@ -22,9 +22,17 @@ class CommunityLayer:
         self.lock = threading.Lock()
         self.group_participants = {}  
     
+    def update_groupview(self, participants):
+        with self.lock:
+            self.group_participants=participants.copy()
+
     def get_groupview(self, key):
         with self.lock:
             return self.group_participants.get(key)
+        
+    def get_groupview_copy(self):
+        with self.lock:
+            return self.group_participants.copy()
 
     def set_groupview(self, key, value):
         with self.lock:
@@ -60,10 +68,11 @@ class CommunityLayer:
             self.set_groupview(data["peer_uuid"],time.time())
 
     def send_join_response(self, addr):
+        participant=self.get_groupview_copy()
         response = {
             "community_type": "WANT_TO_JOIN_RESPONSE",
             "last_messages": self.message_history[-20:],
-            "participants": self.group_participants
+            "participants": participant
         }
         return response
 
@@ -101,9 +110,15 @@ class CommunityLayer:
     def group_view(self):
         while self.running:
             now = time.time()
-            for key in self.group_participants:
-                if(now-self.get_groupview(key)>=shared_data_instance.HEARTBEAT_TIMEOUT):
-                    self.remove_groupview(key)
+
+            participant=self.get_groupview_copy()
+            
+            for key in list(participant.keys()):
+                if(now-participant[key]>=shared_data_instance.HEARTBEAT_TIMEOUT):
+                    del participant[key]
+
+            self.update_groupview(participant)
+            del participant
             self.print_groupview()
             time.sleep(shared_data_instance.HEARTBEAT_TIMEOUT)
 

@@ -3,6 +3,7 @@ import uuid
 import socket
 import random
 import json
+import os
 
 """
 To do : 
@@ -25,7 +26,7 @@ class IdentityLayer:
         self.multicast_address = shared_data_instance.GROUP_ADDRESS
         self.multicast_port = shared_data_instance.GROUP_PORT
         self.sock = self.initialize_multicast_socket()
-        print(f"Node initialized with UUID: {self.uuid} on port: {self.port}")
+        print(f"Node initialized with UUID: {self.uuid} on port: {self.port} with pid : {os.getpid()}")
 
 
     def initialize_multicast_socket(self):
@@ -47,8 +48,8 @@ class IdentityLayer:
         return sock
     
     def multicast_listen(self):
-        print("Listening to multicast messages...") #
-        self._log_event("Listening to multicast messages...")
+        print("Listening to multicast messages...") 
+
         while True:
             
             data, addr = self.sock.recvfrom(1024)

@@ -5,6 +5,7 @@ class SharedData:
         self.HEARTBEAT_INT=2 # milli second
         self.HEARTBEAT_TIMEOUT=5
         self.DEBUG =True    
+        
 shared_data_instance = SharedData()
 
 #Message Types
