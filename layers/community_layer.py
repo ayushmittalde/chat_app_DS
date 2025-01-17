@@ -17,11 +17,17 @@ class CommunityLayer:
         self.received_leader_response = False 
         self.received_leader_heartbeat = False 
         self.running = False # used for heartbeat
-        self.message_queue = queue.Queue()
         self.message_history = ["Test1", "Test2","Test3"]  
         self.lock = threading.Lock()
         self.group_participants = {}  
+        self.id=str(self.reliablity_layer.identity_layer.uuid)
+        ### Variables for Bully algorithim 
+        self.bully_message_queue = queue.Queue()
+        self.bullystate = "IDLE"
+        self.started_election=False
     
+    #### Helper Fucntion for group view ####
+
     def update_groupview(self, participants):
         with self.lock:
             self.group_participants=participants.copy()
@@ -45,9 +51,28 @@ class CommunityLayer:
 
     def print_groupview(self):
         with self.lock:
-            print(self.group_participants)
+            for key in self.group_participants:
+                print(key)
 
-    def handle_message(self, message, addr):
+    def group_view(self):
+            while self.running:
+                now = time.time()
+
+                participant=self.get_groupview_copy()
+                
+                for key in list(participant.keys()):
+                    if(now-participant[key]>=shared_data_instance.HEARTBEAT_TIMEOUT):
+                        del participant[key]
+
+                self.update_groupview(participant)
+                del participant
+                self.print_groupview()
+                time.sleep(shared_data_instance.HEARTBEAT_TIMEOUT)
+    
+    #### Helper Fucntion for group view ####
+    #### Message Handling ####
+
+    def handle_message(self, message):
         """
         Type : Message Handling
         Purpose : Handles community layer messages
@@ -55,9 +80,10 @@ class CommunityLayer:
         Return : Nothing
         """
         data=json.loads(message)                    # decodes json for the community layer
+
         if (data["community_type"]=="WANT_TO_JOIN"):
             if self.reliablity_layer.identity_layer.is_leader:
-                response=self.send_join_response(addr)
+                response=self.send_join_response()
                 self.send_response(response)
                 self.set_groupview(data["peer_uuid"],time.time())
 
@@ -67,7 +93,11 @@ class CommunityLayer:
         elif(data["community_type"]=="HEARTBEAT"):
             self.set_groupview(data["peer_uuid"],time.time())
 
-    def send_join_response(self, addr):
+        elif(data["community_type"]=="ELECTION"):
+            self.bully_message_queue.put(data)
+
+
+    def send_join_response(self):
         participant=self.get_groupview_copy()
         response = {
             "community_type": "WANT_TO_JOIN_RESPONSE",
@@ -86,20 +116,31 @@ class CommunityLayer:
         """
         self.reliablity_layer.send_response(json.dumps(response))
 
+    def broadcast_elecmsg(self,message,key):
+        """
+        Type : Message Handling
+        Purpose : Send response to Identity layer
+        Args : python dictionary
+        Return : Nothing
+        """
+        self.reliablity_layer.broadcast_elecmsg(json.dumps(message),key)  
+
+    #### Message Handling ####
+    #### Heart Beat ####
+
     def start_heartbeat(self):
         self.running = True
         thread = threading.Thread(target=self.heartbeat, daemon=True)
         thread.start()
 
-        if self.reliablity_layer.identity_layer.is_leader:
-            thread_groupview = threading.Thread(target=self.group_view, daemon=True)
-            thread_groupview.start()
+        thread_groupview = threading.Thread(target=self.group_view, daemon=True)
+        thread_groupview.start()
 
     def heartbeat(self):
         while self.running:
             beat = {
             "community_type": "HEARTBEAT",
-            "peer_uuid": str(self.reliablity_layer.identity_layer.uuid)
+            "peer_uuid": self.id
             }
             self.reliablity_layer.send_heartbeat(json.dumps(beat))
             time.sleep(shared_data_instance.HEARTBEAT_INT) 
@@ -107,20 +148,10 @@ class CommunityLayer:
     def stop_heartbeat(self):
         self.running = False
         
-    def group_view(self):
-        while self.running:
-            now = time.time()
+    #### Heart Beat ####
 
-            participant=self.get_groupview_copy()
-            
-            for key in list(participant.keys()):
-                if(now-participant[key]>=shared_data_instance.HEARTBEAT_TIMEOUT):
-                    del participant[key]
-
-            self.update_groupview(participant)
-            del participant
-            self.print_groupview()
-            time.sleep(shared_data_instance.HEARTBEAT_TIMEOUT)
+    #### Bully Algorithim ###
+    #### Bully Algorithim ####
 
     def attempt_join(self):
         joined = False
@@ -131,7 +162,7 @@ class CommunityLayer:
                 print(f"Attempting to join (Attempt {attempt + 1}/{self.max_retries}). Waiting for {delay:.2f} seconds...")
                 message={
                     "community_type": "WANT_TO_JOIN",
-                    "peer_uuid": str(self.reliablity_layer.identity_layer.uuid)
+                    "peer_uuid": self.id
                 }
 
                 self.send_response(message)
