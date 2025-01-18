@@ -20,7 +20,7 @@ class CommunityLayer:
         self.message_history = ["Test1", "Test2","Test3"]  
         self.lock = threading.Lock()
         self.group_participants = {}  
-        self.id=str(self.reliablity_layer.identity_layer.uuid)
+        self.id="0"
         ### Variables for Bully algorithim 
         self.bully_message_queue = queue.Queue()
         self.bullystate = "IDLE"
@@ -195,7 +195,9 @@ class CommunityLayer:
         self.reliablity_layer: ReliabilityLayer = reliability_layer
 
     def init(self):
+        self.id=str(self.reliablity_layer.identity_layer.uuid)
         self.reliablity_layer.init()
+        self.start_heartbeat()
 
     def log_event(self, event_message: str):
         self.ordering_layer.log_event(event_message)
