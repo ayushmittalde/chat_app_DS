@@ -61,7 +61,10 @@ class CommunityLayer:
         while self.bullyrunning:
 
             if self.bullystate == "IDLE":
-                if (self.received_leader_heartbeat==True):
+                self.wait_for_elecmsg() # handling messages in IDLE state
+
+                if (self.received_leader_heartbeat==True): 
+                    self.started_election = False
                     time.sleep(2)  # Prevent busy-waiting
                 else:
                     self.bullystate = "ELECTION"
@@ -91,6 +94,7 @@ class CommunityLayer:
                 self.send_coordinator_message()
                 self.bullystate="IDLE"
                 self.received_leader_heartbeat=True
+                self.started_election = False
                 print(f"Bully Algorithim next state {self.bullystate}")
 
             time.sleep(0.5)  # Prevent busy-waiting
@@ -101,8 +105,8 @@ class CommunityLayer:
         """
         if self.bullystate == "ELECTION":
             self.bullystate = "WAITING RESPONSE"
-            self.started_election = True
             self.broadcast_election()
+            self.started_election = True
 
     def broadcast_election(self): #Final
         """
@@ -127,11 +131,51 @@ class CommunityLayer:
             if not higher_node:
                 self.declare_self_as_leader()
 
+    def wait_for_elecmsg(self):   #Final 
+        got_message=False
+
+        # Get the message from the Queue and process it, if queue is empty exception is raised
+        try:
+            message = self.bully_message_queue.get_nowait()
+            got_message=True
+        except queue.Empty:
+            # This is done to make sure print is there for only one time
+                print(f"No message in the bully algorithim queue")
+
+        if got_message==True:
+            got_message=False
+            # Check if a RESPONSE message is received
+            # This will change the state to "WAITING COD"
+            if (self.received_response_message(message)==True):  
+                # do not process , should not happen 
+                pass
+            
+            # Check if an ELECTION message is received
+            elif self.received_election_message(message):  
+                # Respond to the election message
+                id =message["peer_uuid"]
+                self.send_response_message(id)
+                self.bullystate="ELECTION"
+
+            # Check if a COORDINATOR message is received
+            # Stop election process and acknowledge the new leader
+            # Change the state to IDLE
+            #Election Ended
+            elif self.received_coordinator_message(message):  
+                id =message["peer_uuid"]
+                self.acknowledge_coordinator_message(id)
+                self.bullystate="IDLE" 
+
+            #special case when we receive CO-OD from a lower id , we should start an election
+            elif (message["peer_uuid"]<self.id and message["election_type"]=="COORDINATOR"):
+                # Our id is bigger than ours so wrong election 
+                    self.bullystate="ELECTION"
+
     def wait_for_responses(self):   #Final 
         timeout = shared_data_instance.ACK_ELECTION_TIMEOUT
         start_time = time.time()
         got_message=False
-
+        printcount=0
 
         while time.time() - start_time < timeout:
             # Get the message from the Queue and process it, if queue is empty exception is raised
@@ -139,7 +183,10 @@ class CommunityLayer:
                 message = self.bully_message_queue.get_nowait()
                 got_message=True
             except queue.Empty:
-                print(f"No message in the bully algorithim queue")
+                # This is done to make sure print is there for only one time
+                if printcount==0:
+                    print(f"No message in the bully algorithim queue")
+                    printcount=1
 
             if got_message==True:
                 got_message=False
@@ -161,30 +208,37 @@ class CommunityLayer:
                 #Election Ended
                 elif self.received_coordinator_message(message):  
                     id =message["peer_uuid"]
-                    self.acknowledge_coordinator_message()
+                    self.acknowledge_coordinator_message(id)
                     return 
-
+        print(f"Timeout awaiting response")
         # If no response received, declare self as leader and send COORDINATOR and change the state to LEADER
         self.declare_self_as_leader()
 
     def received_response_message(self,message):    #FINAL used in Wait response
         # Check if a RESPONSE message has been received, (message["peer_uuid"]>self.id) is a nautal condition
         if ((message["election_type"]=="RESPONSE") and (message["peer_uuid"]>self.id) ):
+            print(f" Message processed as response {message}")
             return True
         else :
+            print(f" Message ignored as response {message}")
             return False
         
     def received_election_message(self,message): #Final , correct 
         # Check if an ELECTION message has been received
         if (message["election_type"]=="ELECTION" and (message["peer_uuid"]<self.id) ):
+            print(f"Message processed as election {message}")
             return True
         else :
+            print(f"Message ignored as election {message}")
             return False
         
     def received_coordinator_message(self,message): #Final , correct
         if (message["election_type"]=="COORDINATOR" and (message["peer_uuid"]>self.id) ):
+            print(f"Message processed as co-ordinator {message}")
             return True
         else :
+            # we are not doing anything if we receive co-ordinator message from a lower node because we are already in the elction , will over run him in near future
+            print(f"Message ignored as co-ordinator {message}")
             return False
     
     def send_response_message(self, peer_uuid): #Final , correct
@@ -198,6 +252,8 @@ class CommunityLayer:
                 "peer_uuid": self.id
             }
             self.broadcast_elecmsg(message, peer_uuid)
+        else :
+            print(f"Message ignored because uuid was higher {peer_uuid}")
     
     def acknowledge_coordinator_message(self,id):   #Final , correct
         """
@@ -208,6 +264,9 @@ class CommunityLayer:
             print(f"Node {self.leader_id} is the leader.")
             self.received_leader_heartbeat=True
             self.bullystate = "IDLE"
+        else :
+            # if we see a smaller id coode then we should start an election if we are idle , if already in between election then start it
+            print(f"Message ignored because uuid was smaller {id}")
 
     def declare_self_as_leader(self):   #Final 
         """
@@ -230,6 +289,8 @@ class CommunityLayer:
         timeout = shared_data_instance.ELECTION_COD_TIMEOUT
         start_time = time.time()
         got_message=False
+        printcount=0
+
 
         while time.time() - start_time < timeout:
             # Get the message from the Queue and process it, if queue is empty exception is raised
@@ -237,7 +298,9 @@ class CommunityLayer:
                 message = self.bully_message_queue.get_nowait()
                 got_message=True
             except queue.Empty:
-                print(f"No message in the bully algorithim queue")
+                if printcount==0:
+                    print(f"No message in the bully algorithim queue")
+                    printcount=1
             
             if got_message==True:
                 got_message=False
@@ -262,6 +325,8 @@ class CommunityLayer:
                     self.acknowledge_coordinator_message(id)
                     return 
 
+        print(f"Timeout awaiting co-od")
+        self.started_election=False
         # If no response co-ordinator message is received, this means we have to restart the election 
         self.bullystate="ELECTION"
 
