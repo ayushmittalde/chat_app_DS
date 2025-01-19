@@ -7,6 +7,10 @@ class SharedData:
         self.DEBUG =True    
         self.ACK_ELECTION_TIMEOUT=5
         self.ELECTION_COD_TIMEOUT=5
+        self.COMM_DEBUGBULLY=False
+        self.COMM_DEBUGGVIEW=True
+        self.COMM_DEBUGCOMM=False
+        self.COMM_DEBUGOTH=True
         
 shared_data_instance = SharedData()
 

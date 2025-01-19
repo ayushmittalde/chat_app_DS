@@ -17,22 +17,15 @@ class IdentityLayer:
         """
         Type : Constructor
         Purpose : Initialize the Identity layer
-        Args : is_leader
         Return : Nothing
         """
         self.uuid = uuid.uuid4()
         self.is_leader = False
         self.port =-1       #unicast port
         self.local_ip=""    # unicast ip
-        self.uni_sock=self.initialize_unicast_socket()                  # initialize unicast channel
-
         self.multicast_address = shared_data_instance.GROUP_ADDRESS
         self.multicast_port = shared_data_instance.GROUP_PORT           
-        self.multi_sock = self.initialize_multicast_listsocket()            # initialize multicast channel
-        self.multi_sendsock=self.initialize_multicast_sendsocket()                  # initialize unicast channel
-
         self.directory ={}                                              # maps uuids to ip address and port
-        print(f"Node initialized with UUID: {self.uuid} on port: {self.port} with pid : {os.getpid()}")
 
     def initialize_multicast_sendsocket(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -71,11 +64,11 @@ class IdentityLayer:
             except:
                 pass
         self.local_ip = socket.gethostbyname(socket.gethostname())
-        print(self.local_ip,self.port)
+        self.log_event(f" Port {self.local_ip} IP : {self.port}")
         return sock
 
     def unicast_listen(self):
-        print(f"Listening for UDP messages on port {self.port}...")
+        self.log_event(f"Listening for UDP messages on port {self.port}...")
 
         while True:
             data, addr = self.uni_sock.recvfrom(1024)  # Buffer size 1024 bytes
@@ -85,7 +78,7 @@ class IdentityLayer:
         self.uni_sock.sendto(message.encode(), addr)  
           
     def multicast_listen(self):
-        print("Listening to multicast messages...") 
+        self.log_event("Listening to multicast messages...") 
 
         while True:
             data, addr = self.multi_sock.recvfrom(1024)
@@ -145,14 +138,16 @@ class IdentityLayer:
         self.reliability_layer: ReliabilityLayer = reliability_layer
 
     def init(self):
+        self.uni_sock=self.initialize_unicast_socket()                  # initialize unicast channel
+        self.multi_sock = self.initialize_multicast_listsocket()            # initialize multicast channel
+        self.multi_sendsock=self.initialize_multicast_sendsocket()                  # initialize unicast channel
+        self.log_event(f"Node initialized with UUID: {self.uuid} on port: {self.port} with pid : {os.getpid()}")
+
         multilistener_thread = threading.Thread(target=self.multicast_listen, daemon=False)
         unilistener_thread = threading.Thread(target=self.unicast_listen, daemon=False) 
         multilistener_thread.start()
         unilistener_thread.start()
 
-    def _log_event(self, event_message: str):
-        #self.reliability_layer.log_event(event_message)
+    def log_event(self, event_message: str):
+        self.reliability_layer.log_event(event_message)
         pass
-
-    def test_unicastsend(self,message,addr):
-        self.unicast_message(message,addr)

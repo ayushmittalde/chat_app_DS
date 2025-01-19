@@ -13,20 +13,23 @@ make use of the address in handle message
 class CommunityLayer:
     def __init__(self):
         self.retry_count = 0 
-        self.max_retries = 5 
+        self.max_retries = int(random.uniform(1, 15))
         self.received_leader_response = False 
         self.received_leader_heartbeat = False 
         self.running = False # used for heartbeat
         self.message_history = ["Test1", "Test2","Test3"]  
         self.lock = threading.Lock()
         self.group_participants = {}  
-        self.id="0"
+        self.id=""
         ### Variables for Bully algorithim 
         self.bully_message_queue = queue.Queue()
         self.bullystate = "IDLE"
         self.started_election = False
         self.bullyrunning=False
         self.leader_id="NULL"
+        ### Variables for logging
+        self.log_message_queue = queue.Queue()
+
     
     #### Helper Fucntion for group view ####
 
@@ -54,7 +57,7 @@ class CommunityLayer:
     def print_groupview(self):
         with self.lock:
             for key in self.group_participants:
-                print(key)
+                self.printk("GROUPVIEW","Group view :"+key[:4])
 
     def group_view(self):
         while self.running:
@@ -73,7 +76,7 @@ class CommunityLayer:
                             "peer_uuid": self.id
                         }
                         self.leader_id="NULL"
-                        self.bully_message_queue(message)
+                        self.bully_message_queue.put(message)
 
 
             self.update_groupview(participant)
@@ -103,20 +106,31 @@ class CommunityLayer:
             #abstract leader information
             self.received_leader_response = True
             self.leader_id=data["leader_uuid"]
-            print(data["participants"])
             self.update_groupview(data["participants"])
-            self.print_groupview()
-            print(f"leader id {self.leader_id}")
 
 
         elif(data["community_type"]=="HEARTBEAT"):
             if (self.get_groupview(data["peer_uuid"])!=None):
                 self.set_groupview(data["peer_uuid"],time.time())
             else :
-                print(f"{data} ignored in heartbeat")
+                if(self.id==self.leader_id):
+                    self.tryjoinagain(data["peer_uuid"])
+                    self.printk("COMM",f"{data} ignored in heartbeat")
 
         elif(data["community_type"]=="ELECTION"):
             self.bully_message_queue.put(data)
+
+        elif( (data["community_type"]== "TRY_JOIN_AGAIN" )and (data["intended_id"]==self.id)):
+            self.attempt_join()
+
+    def tryjoinagain(self,id):
+        response = {
+            "community_type": "TRY_JOIN_AGAIN",
+            "leader_uuid":self.leader_id,
+            "intended_id": id
+        }
+        self.printk("GROUPVIEW",f"Received unknown heartbeat asking to join {response}")
+        self.send_response(response)
 
     def send_join_response(self):
         participant=self.get_groupview_copy()
@@ -188,7 +202,9 @@ class CommunityLayer:
 
             if self.bullystate == "IDLE":
                 self.wait_for_elecmsg() # handling messages in IDLE state
-                print(f"Bully Algorithim next state {self.bullystate}")
+                self.printk("GROUPVIEW",f"Leader id{self.leader_id[:5]}")
+                self.printk("GROUPVIEW",f"Self id{self.id[:5]}")
+                self.printk("BULLY",f"Bully Algorithim next state {self.bullystate}")
                 time.sleep(2)  # Prevent busy-waiting
 
             # 2. State handling for election process
@@ -196,18 +212,18 @@ class CommunityLayer:
                 # Send election messages to higher UUIDs
                 self.start_election()
                 # Next : Wait for responses or declare itself as leader
-                print(f"Bully Algorithim next state {self.bullystate}")
+                self.printk("BULLY",f"Bully Algorithim next state {self.bullystate}")
 
             #3 can go to LEADER state , IDLE state and WAITING COD state
             if self.bullystate == "WAITING RESPONSE":
                 # If we're waiting for a RESPONSE, handle the timeout or successful response
                 self.wait_for_responses()
-                print(f"Bully Algorithim next state {self.bullystate}")
+                self.printk("BULLY",f"Bully Algorithim next state {self.bullystate}")
 
             # if leader responds then this will change to IDLE or ELECTION state
             if self.bullystate == "WAITING COD":
                 self.wait_for_coordinator()
-                print(f"Bully Algorithim next state {self.bullystate}")
+                self.printk("BULLY",f"Bully Algorithim next state {self.bullystate}")
            
             # end the election
             if self.bullystate == "LEADER":
@@ -215,7 +231,7 @@ class CommunityLayer:
                 self.bullystate="IDLE"
                 self.received_leader_heartbeat=True
                 self.started_election = False
-                print(f"Bully Algorithim next state {self.bullystate}")
+                self.printk("BULLY",f"Bully Algorithim next state {self.bullystate}")
 
             time.sleep(0.5)  # Prevent busy-waiting
 
@@ -260,7 +276,7 @@ class CommunityLayer:
             got_message=True
         except queue.Empty:
             # This is done to make sure print is there for only one time
-                print(f"No message in the bully algorithim queue")
+                self.printk("BULLY",f"No message in the bully algorithim queue")
 
         if got_message==True:
             got_message=False
@@ -309,7 +325,7 @@ class CommunityLayer:
             except queue.Empty:
                 # This is done to make sure print is there for only one time
                 if printcount==0:
-                    print(f"No message in the bully algorithim queue")
+                    self.printk("BULLY",f"No message in the bully algorithim queue")
                     printcount=1
 
             if got_message==True:
@@ -334,35 +350,35 @@ class CommunityLayer:
                     id =message["peer_uuid"]
                     self.acknowledge_coordinator_message(id)
                     return 
-        print(f"Timeout awaiting response")
+        self.printk("BULLY",f"Timeout awaiting response")
         # If no response received, declare self as leader and send COORDINATOR and change the state to LEADER
         self.declare_self_as_leader()
 
     def received_response_message(self,message):    #FINAL used in Wait response
         # Check if a RESPONSE message has been received, (message["peer_uuid"]>self.id) is a nautal condition
         if ((message["election_type"]=="RESPONSE") and (message["peer_uuid"]>self.id) ):
-            print(f" Message processed as response {message}")
+            self.printk("BULLY",f" Message processed as response {message}")
             return True
         else :
-            print(f" Message ignored as response {message}")
+            self.printk("BULLY",f" Message ignored as response {message}")
             return False
         
     def received_election_message(self,message): #Final , correct 
         # Check if an ELECTION message has been received
         if (message["election_type"]=="ELECTION" and (message["peer_uuid"]<self.id) ):
-            print(f"Message processed as election {message}")
+            self.printk("BULLY",f"Message processed as election {message}")
             return True
         else :
-            print(f"Message ignored as election {message}")
+            self.printk("BULLY",f"Message ignored as election {message}")
             return False
         
     def received_coordinator_message(self,message): #Final , correct
         if (message["election_type"]=="COORDINATOR" and (message["peer_uuid"]>self.id) ):
-            print(f"Message processed as co-ordinator {message}")
+            self.printk("BULLY",f"Message processed as co-ordinator {message}")
             return True
         else :
             # we are not doing anything if we receive co-ordinator message from a lower node because we are already in the elction , will over run him in near future
-            print(f"Message ignored as co-ordinator {message}")
+            self.printk("BULLY",f"Message ignored as co-ordinator {message}")
             return False
     
     def send_response_message(self, peer_uuid): #Final , correct
@@ -377,7 +393,7 @@ class CommunityLayer:
             }
             self.broadcast_elecmsg(message, peer_uuid)
         else :
-            print(f"Message ignored because uuid was higher {peer_uuid}")
+            self.printk("BULLY",f"Message ignored because uuid was higher {peer_uuid}")
     
     def acknowledge_coordinator_message(self,id):   #Final , correct
         """
@@ -385,12 +401,12 @@ class CommunityLayer:
         """
         if id>self.id: # Usually this should hold implicitly but writing this condition to enforce Bully algo characterstics, this also enable us to shift algorithim to multicast
             self.leader_id=id
-            print(f"Node {self.leader_id} is the leader.")
+            self.printk("BULLY",f"Node {self.leader_id} is the leader.")
             self.received_leader_heartbeat=True
             self.bullystate = "IDLE"
         else :
             # if we see a smaller id coode then we should start an election if we are idle , if already in between election then start it
-            print(f"Message ignored because uuid was smaller {id}")
+            self.printk("BULLY",f"Message ignored because uuid was smaller {id}")
 
     def declare_self_as_leader(self):   #Final 
         """
@@ -423,7 +439,7 @@ class CommunityLayer:
                 got_message=True
             except queue.Empty:
                 if printcount==0:
-                    print(f"No message in the bully algorithim queue")
+                    self.printk("BULLY",f"No message in the bully algorithim queue")
                     printcount=1
             
             if got_message==True:
@@ -449,7 +465,7 @@ class CommunityLayer:
                     self.acknowledge_coordinator_message(id)
                     return 
 
-        print(f"Timeout awaiting co-od")
+        self.printk("BULLY",f"Timeout awaiting co-od")
         self.started_election=False
         # If no response co-ordinator message is received, this means we have to restart the election 
         self.bullystate="ELECTION"
@@ -459,11 +475,10 @@ class CommunityLayer:
 
     def attempt_join(self):
         joined = False
+        delay = 1
         for attempt in range(self.max_retries):
             try:
-                delay = random.uniform(1, 5)
-
-                print(f"Attempting to join (Attempt {attempt + 1}/{self.max_retries}). Waiting for {delay:.2f} seconds...")
+                self.printk("OTH",f"Attempting to join (Attempt {attempt + 1}/{self.max_retries}). Waiting for {delay:.2f} seconds...")
                 message={
                     "community_type": "WANT_TO_JOIN",
                     "peer_uuid": self.id
@@ -474,25 +489,19 @@ class CommunityLayer:
                 start_time = time.time()
                 while time.time() - start_time < delay:
                     if self.received_leader_response:
-                        print("Successfully joined the group.")
+                        self.printk("OTH","Successfully joined the group.")
                         joined = True
                         break
                     time.sleep(0.1)  # Small sleep to avoid busy waiting
                 if joined:
                     break
             except Exception as e:
-                print(f"Error attempting to join: {e}")
+                self.printk("OTH",f"Error attempting to join: {e}")
         if not joined:
-            # sending message to bully algorithim to start the election
-            message = {
-                "community_type": "ELECTION",
-                "election_type": "ATTEMPT_JOIN_FAIL",
-                "peer_uuid": self.id
-            }
-            print("Failed to join after maximum retries. Starting election ")
-            self.bully_message_queue.put(message)
+            return False
         else:
-            print("Node successfully joined the group!")
+            self.printk("OTH","Node successfully joined the group!")
+            return True
 
     def set_ordering_layer(self, ordering_layer):
         from .ordering_layer import OrderingLayer
@@ -503,19 +512,50 @@ class CommunityLayer:
         self.reliablity_layer: ReliabilityLayer = reliability_layer
 
     def init(self):
-        #starting Bully algorithim
         self.id=str(self.reliablity_layer.identity_layer.uuid)
         self.reliablity_layer.init()
-        self.bullyrunning = True
         self.group_participants[self.id]=time.time()
+        
+        log_thread = threading.Thread(target=self.recv_log, daemon=False)
+        log_thread.start()
+
+        output =self.attempt_join()
+        #can lead to election
+        #starting Bully algorithim
+
+        self.bullyrunning = True
         state_machine_thread = threading.Thread(target=self.state_machine, daemon=False)
         state_machine_thread.start()
 
-        #can lead to election
-        self.attempt_join()
+        if(not output):
+        # sending message to bully algorithim to start the election
+            message = {
+                "community_type": "ELECTION",
+                "election_type": "ATTEMPT_JOIN_FAIL",
+                "peer_uuid": self.id
+            }
+            self.printk("OTH","Failed to join after maximum retries. Starting election ")
+            self.bully_message_queue.put(message)
 
         #starting heartbeat and group view once we have participants
-        #self.start_heartbeat()
+        self.start_heartbeat()
 
-    def log_event(self, event_message: str):
-        self.ordering_layer.log_event(event_message)
+    def printk(self,type,message):
+        self.log_message_queue.put((type,message))
+
+
+    def recv_log(self):
+        while True:
+            type,message=self.log_message_queue.get()
+            if type=="BULLY" and shared_data_instance.COMM_DEBUGBULLY ==True:
+                self.log_event(message)
+            elif type =="GROUPVIEW" and shared_data_instance.COMM_DEBUGGVIEW ==True:
+                self.log_event(message)
+            elif type =="COMM" and shared_data_instance.COMM_DEBUGCOMM ==True:
+                self.log_event(message)
+            elif type =="OTH" and shared_data_instance.COMM_DEBUGOTH ==True:
+                self.log_event(message)
+
+    def log_event(self, message: str):
+        #print(message)
+        self.ordering_layer.log_event(message)
