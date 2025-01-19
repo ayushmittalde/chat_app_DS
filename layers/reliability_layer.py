@@ -3,8 +3,11 @@ import json
 No encoding in reliability layer yet
 """
 class ReliabilityLayer:
-    def handle_message(self, message):
+    def handle_message(self, message: str):
          self.community_layer.handle_message(message)
+         
+    def send_message(self, message: str):
+        self.identity_layer.send_message(message)
 
     def send_response(self,response):
         self.identity_layer.send_message(response)

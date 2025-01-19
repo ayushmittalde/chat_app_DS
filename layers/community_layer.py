@@ -87,7 +87,7 @@ class CommunityLayer:
     #### Helper Fucntion for group view ####
     #### Message Handling ####
 
-    def handle_message(self, message):
+    def handle_message(self, message: str):
         """
         Type : Message Handling
         Purpose : Handles community layer messages
@@ -122,6 +122,15 @@ class CommunityLayer:
 
         elif( (data["community_type"]== "TRY_JOIN_AGAIN" )and (data["intended_id"]==self.id)):
             self.attempt_join()
+            
+        # New condition for chat messages
+        elif data["community_type"] == "CHAT":
+            # Pass the chat message to the Ordering Layer
+            self.ordering_layer.handle_message(data["content"])
+
+            # Optional: Log the chat message in the Community Layer
+            self.printk("COMM", f"Chat message from {data['sender']}: {data['content']}")
+
 
     def tryjoinagain(self,id):
         response = {

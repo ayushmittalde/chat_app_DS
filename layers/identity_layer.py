@@ -87,7 +87,7 @@ class IdentityLayer:
     def broadcast_message(self, message):
         self.multi_sendsock.sendto(message.encode(), (self.multicast_address, self.multicast_port))
 
-    def send_message(self,message):
+    def send_message(self,message: str):
         msg = {
                 "identity_type": "MESSAGE",
                 "peer_uuid": str(self.uuid),
@@ -127,7 +127,7 @@ class IdentityLayer:
             addr=self.directory[id]
             self.unicast_message(json.dumps(election),addr)
 
-    def handle_message(self,message):
+    def handle_message(self,message: str):
         data=json.loads(message)
         self.directory[data["peer_uuid"]] = (data["peer_unicast_id"],int(data["peer_unicast_port"]))
         self.reliability_layer.handle_message(data["payload"])

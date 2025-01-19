@@ -13,3 +13,6 @@ class OrderingLayer:
             
     def log_event(self, event_message: str):
         self.application_layer.log_event(event_message)
+        
+    def handle_message(self, message: str):
+        self.application_layer.deliver_message(message)

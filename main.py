@@ -20,10 +20,11 @@ def generate_events(chat_ui):
         counter += 1
         time.sleep(0.5)
 
-def generate_messages(chat_ui):
+def generate_messages(chat_ui, username):
     counter = 1
     while True:
-        chat_ui.deliver_message("Booper", "BOOP")
+        #chat_ui.deliver_message("Booper", "BOOP")
+        chat_ui.deliver_message(username, f"Message {counter}")
         counter += 1
         time.sleep(3.3)
 
@@ -38,9 +39,13 @@ if __name__ == "__main__":
     is_leader = ui.leader_yn.leader_yes_no()
     if is_leader is None:
         exit()
+        
+    # Create the UI layer and pass the username
+    ui_layer = UILayer(lambda x: ui_layer.deliver_message(username, x), username=username)
+
 
     # Create the layers of our architecture
-    ui_layer = UILayer(lambda x: ui_layer.deliver_message("You", x))
+    #ui_layer = UILayer(lambda x: ui_layer.deliver_message("You", x))
     application_layer = ApplicationLayer()
     ordering_layer = OrderingLayer()
     community_layer = CommunityLayer()
@@ -61,6 +66,6 @@ if __name__ == "__main__":
 
     event_generator = threading.Thread(target=generate_events, args=(ui_layer,), daemon=True)
     event_generator.start()
-    chat_generator = threading.Thread(target=generate_messages, args=(ui_layer,), daemon=True)
+    chat_generator = threading.Thread(target=generate_messages, args=(ui_layer, username), daemon=True)
     chat_generator.start()
     ui_layer.start()

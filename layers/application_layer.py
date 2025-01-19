@@ -13,3 +13,14 @@ class ApplicationLayer:
     
     def log_event(self, event_message: str):
         self.ui_layer.log_event(event_message)
+    
+    def send_message(self, message: str):
+        self.ordering_layer.handle_message(message)
+        
+    def deliver_message(self, message: str):
+        data = json.loads(message)
+        sender = data.get("sender", "Unknown")
+        content = data.get("content", "")
+        self.ui_layer.deliver_message(sender, content)
+
+
