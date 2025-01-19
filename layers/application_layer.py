@@ -1,3 +1,4 @@
+import json
 class ApplicationLayer:
     
     def set_ui_layer(self, ui_layer):
@@ -11,16 +12,21 @@ class ApplicationLayer:
     def init(self):
         self.ordering_layer.init()
     
-    def log_event(self, event_message: str):
+    def log_event(self, event_message):
         self.ui_layer.log_event(event_message)
     
-    def send_message(self, message: str):
-        self.ordering_layer.handle_message(message)
+    def handle_message(self, message):
+        data=json.loads(message)
+
+        if (data["ordering_type"]=="UI"):
+            self.ui_layer.handle_message(data["content"])
+         
+    def send_message(self,response):
+        data = {
+            "ordering_type": "UI",
+            "content":response
+        }
+        self.ordering_layer.send_message(json.dumps(data))
         
-    def deliver_message(self, message: str):
-        data = json.loads(message)
-        sender = data.get("sender", "Unknown")
-        content = data.get("content", "")
-        self.ui_layer.deliver_message(sender, content)
 
 

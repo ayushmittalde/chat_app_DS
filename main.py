@@ -34,14 +34,9 @@ if __name__ == "__main__":
     username = ui.name_input.user_input_name()
     if username is None:
         exit()
-    
-    # Query the user whether to initialize as a leader
-    is_leader = ui.leader_yn.leader_yes_no()
-    if is_leader is None:
-        exit()
-        
+            
     # Create the UI layer and pass the username
-    ui_layer = UILayer(lambda x: ui_layer.deliver_message(username, x), username=username)
+    ui_layer = UILayer(username=username)
 
 
     # Create the layers of our architecture
@@ -64,8 +59,8 @@ if __name__ == "__main__":
     reliability_layer.set_identity_layer(identity_layer)
     identity_layer.set_reliability_layer(reliability_layer)
 
-    event_generator = threading.Thread(target=generate_events, args=(ui_layer,), daemon=True)
-    event_generator.start()
-    chat_generator = threading.Thread(target=generate_messages, args=(ui_layer, username), daemon=True)
-    chat_generator.start()
+    #event_generator = threading.Thread(target=generate_events, args=(ui_layer,), daemon=True)
+    #event_generator.start()
+    #chat_generator = threading.Thread(target=generate_messages, args=(ui_layer, username), daemon=True)
+    #chat_generator.start()
     ui_layer.start()

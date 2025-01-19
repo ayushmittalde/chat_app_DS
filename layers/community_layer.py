@@ -124,13 +124,17 @@ class CommunityLayer:
             self.attempt_join()
             
         # New condition for chat messages
-        elif data["community_type"] == "CHAT":
+        elif data["community_type"] == "ORDERING":
             # Pass the chat message to the Ordering Layer
             self.ordering_layer.handle_message(data["content"])
 
-            # Optional: Log the chat message in the Community Layer
-            self.printk("COMM", f"Chat message from {data['sender']}: {data['content']}")
-
+    #Send function can only be called by ordering layer , please use send_response function if you want to send something from community layer
+    def send_message(self,message): 
+        data = {
+            "community_type": "ORDERING",
+            "content":message
+        }
+        self.reliablity_layer.send_message(json.dumps(data))
 
     def tryjoinagain(self,id):
         response = {

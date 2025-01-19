@@ -1,19 +1,19 @@
 from collections import deque
 from typing import Callable
 import urwid
+import json
 
 FRAME_UPDATE_INTERVAL = 0.5
 
 class UILayer:
 
-    def __init__(self, send_message: Callable[[str], None], username: str):
+    def __init__(self, username: str):
         """The send_message function will be called each time the user submits a message"""
         self.username = username  # Store the username
         self.events_shown = False
         self.event_log: deque[str] = deque(maxlen=300)
         self.chat_log: deque[str] = deque(maxlen=300)
         self.status_msg: str = "Not connected"
-        self.send_message: Callable[[str], None] = send_message
         self._setup_ui()
 
     def _setup_ui(self):
@@ -57,14 +57,19 @@ class UILayer:
                 self.ui_message_input.set_edit_text("")
                 self.send_message(message)
     
-    def send_message(self, content: str):
+    def send_message(self, content):
         message = {
-            "type": "chat",
+            "ui_type": "chat",
             "sender": self.username,
             "content": content
         }
         self.application_layer.send_message(json.dumps(message))
     
+    def handle_message(self,content):
+        data=json.loads(content)
+        if (data["ui_type"]=="chat"):
+            self.deliver_message(data["sender"],data["content"])
+
     def log_event(self, event_message: str):
         """Add this message to the UI's event log"""
         self.event_log.append("$ " + event_message + "\n")
@@ -73,10 +78,8 @@ class UILayer:
     def deliver_message(self, sender_name: str, message_text: str):
         """Add this message to the UI's chat log"""
         # Check if the sender is the current user
-        display_name = "You" if sender_name == self.username else sender_name
-
         # Add the message with the sender's name to the chat log
-        self.chat_log.append(f"{display_name}: {message_text}\n")
+        self.chat_log.append(f"{sender_name}: {message_text}\n")
         self.ui_chat_text.set_text(list(reversed(self.chat_log)))
     
     def set_status(self, status_msg: str):

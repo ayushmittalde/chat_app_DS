@@ -1,4 +1,18 @@
+import json
 class OrderingLayer:
+
+    def handle_message(self, message):
+        data=json.loads(message)
+
+        if (data["ordering_type"]=="APPLICATION"):
+            self.application_layer.handle_message(data["content"])
+         
+    def send_message(self,response):
+        data = {
+            "ordering_type": "APPLICATION",
+            "content":response
+        }
+        self.community_layer.send_message(json.dumps(data))
 
     def set_application_layer(self, application_layer):
         from .application_layer import ApplicationLayer
@@ -13,6 +27,3 @@ class OrderingLayer:
             
     def log_event(self, event_message: str):
         self.application_layer.log_event(event_message)
-        
-    def handle_message(self, message: str):
-        self.application_layer.deliver_message(message)
