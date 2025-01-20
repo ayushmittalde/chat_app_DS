@@ -199,6 +199,10 @@ class CommunityLayer:
         
     #### Heart Beat ####
 
+    def handle_delivery_failure(self, convo_id: int):
+        """Called by the reliability layer when delivering a reliable message failed"""
+        pass # TODO
+
     #### Bully Algorithim ###
 
     def state_machine(self):
