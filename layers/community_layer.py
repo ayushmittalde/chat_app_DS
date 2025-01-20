@@ -134,7 +134,7 @@ class CommunityLayer:
             "community_type": "ORDERING",
             "content":message
         }
-        self.reliablity_layer.send_message(json.dumps(data))
+        self.reliability_layer.send_message(json.dumps(data))
 
     def tryjoinagain(self,id):
         response = {
@@ -163,7 +163,7 @@ class CommunityLayer:
         Return : Nothing
         
         """
-        self.reliablity_layer.send_response(json.dumps(response))
+        self.reliability_layer.send_response(json.dumps(response))
 
     def broadcast_elecmsg(self,message,key):
         """
@@ -172,7 +172,7 @@ class CommunityLayer:
         Args : python dictionary
         Return : Nothing
         """
-        self.reliablity_layer.broadcast_elecmsg(json.dumps(message),key)  
+        self.reliability_layer.broadcast_elecmsg(json.dumps(message),key)  
 
     #### Message Handling ####
     #### Heart Beat ####
@@ -191,7 +191,7 @@ class CommunityLayer:
             "community_type": "HEARTBEAT",
             "peer_uuid": self.id
             }
-            self.reliablity_layer.send_heartbeat(json.dumps(beat))
+            self.reliability_layer.send_heartbeat(json.dumps(beat))
             time.sleep(shared_data_instance.HEARTBEAT_INT) 
     
     def stop_heartbeat(self):
@@ -520,13 +520,13 @@ class CommunityLayer:
         from .ordering_layer import OrderingLayer
         self.ordering_layer: OrderingLayer = ordering_layer
 
-    def set_reliablity_layer(self, reliability_layer):
+    def set_reliability_layer(self, reliability_layer):
         from .reliability_layer import ReliabilityLayer
-        self.reliablity_layer: ReliabilityLayer = reliability_layer
+        self.reliability_layer: ReliabilityLayer = reliability_layer
 
     def init(self):
-        self.id=str(self.reliablity_layer.identity_layer.uuid)
-        self.reliablity_layer.init()
+        self.id=str(self.reliability_layer.identity_layer.uuid)
+        self.reliability_layer.init()
         self.group_participants[self.id]=time.time()
         
         log_thread = threading.Thread(target=self.recv_log, daemon=False)
