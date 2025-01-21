@@ -1,9 +1,10 @@
 import threading
 import time
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
+import sys
+import json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../layers")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 import ui.name_input
 import ui.leader_yn
 from layers.application_layer import ApplicationLayer
@@ -12,12 +13,35 @@ from layers.identity_layer import IdentityLayer
 from layers.ordering_layer import OrderingLayer
 from layers.reliability_layer import ReliabilityLayer
 from layers.ui_layer import UILayer
-from layers.config import *
+
+def generate_events(chat_ui):
+    counter = 1
+    while True:
+        chat_ui.log_event(f"This is event {counter}!")
+        counter += 1
+        time.sleep(0.5)
+
+def generate_messages(chat_ui, username):
+    counter = 1
+    while True:
+        #chat_ui.deliver_message("Booper", "BOOP")
+        chat_ui.deliver_message(username, f"Message {counter}")
+        counter += 1
+        time.sleep(3.3)
 
 if __name__ == "__main__":
+    # TODO: Integrate the username querying into a single UI system
+    # Query the user for an user name
+    username = ui.name_input.user_input_name()
+    if username is None:
+        exit()
+            
+    # Create the UI layer and pass the username
+    ui_layer = UILayer(username=username)
+
 
     # Create the layers of our architecture
-    ui_layer = UILayer(lambda x: ui_layer.deliver_message("You", x))
+    #ui_layer = UILayer(lambda x: ui_layer.deliver_message("You", x))
     application_layer = ApplicationLayer()
     ordering_layer = OrderingLayer()
     community_layer = CommunityLayer()
@@ -36,19 +60,17 @@ if __name__ == "__main__":
     reliability_layer.set_identity_layer(identity_layer)
     identity_layer.set_reliability_layer(reliability_layer)
 
-    is_leader = input("Is this node the leader? (yes/no): ").strip().lower() == "yes"
-
-    if(is_leader):
-        identity_layer.is_leader=True
-        listener_thread = threading.Thread(target=identity_layer.multicast_listen, daemon=False)
-        community_layer.start_heartbeat()
-        listener_thread.start()
-        listener_thread.join()
-    else:
-        listener_thread = threading.Thread(target=identity_layer.multicast_listen, daemon=False)
-        listener_thread.start()
-        community_layer.start_heartbeat()
-        community_layer.attempt_join()
-        listener_thread.join()
+    #event_generator = threading.Thread(target=generate_events, args=(ui_layer,), daemon=True)
+    #event_generator.start()
+    #chat_generator = threading.Thread(target=generate_messages, args=(ui_layer, username), daemon=True)
+    #chat_generator.start()
+    #ui_layer.start()
+    ordering_layer.init()
+    message_1=ordering_layer.test_send_dummymessage("ayush")
+    message_2=ordering_layer.test_send_dummymessage("mittal")
+    time.sleep(3)
+    ordering_layer.community_layer.send_message(json.dumps(message_2))
+    time.sleep(3)
+    ordering_layer.community_layer.send_message(json.dumps(message_1))
 
 

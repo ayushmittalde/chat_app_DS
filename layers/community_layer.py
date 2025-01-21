@@ -18,7 +18,7 @@ class CommunityLayer:
         self.received_leader_heartbeat = False 
         self.running = False # used for heartbeat
         self.message_history = ["Test1", "Test2","Test3"]  
-        self.lock = threading.Lock()
+        self.lock = threading.Lock()    #used for manipulating participants
         self.group_participants = {}  
         self.id=""
         ### Variables for Bully algorithim 
@@ -30,7 +30,16 @@ class CommunityLayer:
         ### Variables for logging
         self.log_message_queue = queue.Queue()
 
-    
+    ### Helper function for groupview ###
+    def get_holdbackq_copy(self):
+        self.ordering_layer.getcopy_hold_back_queue()
+
+    def get_vectorclock_copy(self):
+        self.ordering_layer.get_vectorclock_copy()
+
+    def set_holdbackq_copy(self,x):
+        self.ordering_layer.update_hold_back_queue(x)
+
     #### Helper Fucntion for group view ####
 
     def update_groupview(self, participants):
@@ -64,10 +73,12 @@ class CommunityLayer:
             now = time.time()
 
             participant=self.get_groupview_copy()
+            #vectorclock=self.ordering_layer.get_vectorclock_copy()
             
             for key in list(participant.keys()):
                 if(now-participant[key]>=shared_data_instance.HEARTBEAT_TIMEOUT):
                     del participant[key]
+                    #del vectorclock[key]
                     
                     if (key==self.leader_id):
                         message = {
@@ -80,6 +91,7 @@ class CommunityLayer:
 
 
             self.update_groupview(participant)
+            #self.ordering_layer.set_vectorclock(vectorclock)
             del participant
             self.print_groupview()
             time.sleep(shared_data_instance.HEARTBEAT_TIMEOUT)
@@ -99,15 +111,24 @@ class CommunityLayer:
         if (data["community_type"]=="WANT_TO_JOIN"):
             if self.leader_id==self.id:
                 self.set_groupview(data["peer_uuid"],time.time())
-                response=self.send_join_response()
+                x=data["peer_uuid"]
+                self.printk("COMM",f"debug {x}")
+                self.ordering_layer.set_vectorclock_element(data["peer_uuid"],0)
+                response=self.send_join_response(data["peer_uuid"])
                 self.send_response(response)
+
+                self.ordering_layer.replay_holdbackqueue()  #Replaying holdback queue so that new node can fill all the messages
 
         elif(data["community_type"]=="WANT_TO_JOIN_RESPONSE"):
             #abstract leader information
             self.received_leader_response = True
             self.leader_id=data["leader_uuid"]
             self.update_groupview(data["participants"])
-
+            if(data["intended_id"]==self.id):
+                if (data["vectclock"]!=None):
+                    self.ordering_layer.set_vectorclock(data["vectclock"])
+            else :
+                self.ordering_layer.set_vectorclock_element(data["intended_id"],0)
 
         elif(data["community_type"]=="HEARTBEAT"):
             if (self.get_groupview(data["peer_uuid"])!=None):
@@ -145,13 +166,17 @@ class CommunityLayer:
         self.printk("GROUPVIEW",f"Received unknown heartbeat asking to join {response}")
         self.send_response(response)
 
-    def send_join_response(self):
+    def send_join_response(self,id):
         participant=self.get_groupview_copy()
+        vector_clock=self.ordering_layer.get_vectorclock_copy()
+
         response = {
             "community_type": "WANT_TO_JOIN_RESPONSE",
             "last_messages": self.message_history[-20:],
             "leader_uuid":self.leader_id,
-            "participants": participant
+            "participants": participant,
+            "vectclock":vector_clock,
+            "intended_id":id
         }
         return response
 
@@ -322,7 +347,6 @@ class CommunityLayer:
             
             elif ((message["election_type"]=="ATTEMPT_JOIN_FAIL") or (message["election_type"]== "LEADER_FAIL")):
                 self.bullystate="ELECTION"
-
 
     def wait_for_responses(self):   #Final 
         timeout = shared_data_instance.ACK_ELECTION_TIMEOUT
@@ -528,8 +552,9 @@ class CommunityLayer:
         self.id=str(self.reliablity_layer.identity_layer.uuid)
         self.reliablity_layer.init()
         self.group_participants[self.id]=time.time()
+        self.ordering_layer.set_vectorclock_element(self.id,0)
         
-        log_thread = threading.Thread(target=self.recv_log, daemon=False)
+        log_thread = threading.Thread(target=self.recv_log, daemon=True)
         log_thread.start()
 
         output =self.attempt_join()
@@ -537,7 +562,7 @@ class CommunityLayer:
         #starting Bully algorithim
 
         self.bullyrunning = True
-        state_machine_thread = threading.Thread(target=self.state_machine, daemon=False)
+        state_machine_thread = threading.Thread(target=self.state_machine, daemon=True)
         state_machine_thread.start()
 
         if(not output):
@@ -556,7 +581,6 @@ class CommunityLayer:
     def printk(self,type,message):
         self.log_message_queue.put((type,message))
 
-
     def recv_log(self):
         while True:
             type,message=self.log_message_queue.get()
@@ -570,5 +594,4 @@ class CommunityLayer:
                 self.log_event(message)
 
     def log_event(self, message: str):
-        #print(message)
         self.ordering_layer.log_event(message)

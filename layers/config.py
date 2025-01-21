@@ -9,8 +9,9 @@ class SharedData:
         self.ELECTION_COD_TIMEOUT=5
         self.COMM_DEBUGBULLY=False
         self.COMM_DEBUGGVIEW=True
-        self.COMM_DEBUGCOMM=False
+        self.COMM_DEBUGCOMM=True
         self.COMM_DEBUGOTH=True
+        self.ORDERING=True
         
 shared_data_instance = SharedData()
 

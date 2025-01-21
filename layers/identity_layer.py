@@ -71,20 +71,34 @@ class IdentityLayer:
         self.log_event(f"Listening for UDP messages on port {self.port}...")
 
         while True:
-            data, addr = self.uni_sock.recvfrom(1024)  # Buffer size 1024 bytes
-            self.handle_message(data.decode())
+            data, addr = self.uni_sock.recvfrom(2048)  # Buffer size 1024 bytes
+            messages=data.decode().strip().split("\n")
+            for msg in messages:
+                try:
+                    self.handle_message(msg)
+                except:
+                    self.log_event("Identity Layer Error in splitting messages")
 
     def unicast_message(self, message,addr):
+        message=message+"\n"
         self.uni_sock.sendto(message.encode(), addr)  
           
     def multicast_listen(self):
         self.log_event("Listening to multicast messages...") 
 
         while True:
-            data, addr = self.multi_sock.recvfrom(1024)
-            self.handle_message(data.decode())
+            data, addr = self.multi_sock.recvfrom(2048)
+            messages=data.decode().strip().split("\n")
+            for msg in messages:
+                try:
+                    self.handle_message(msg)
+                except:
+                    self.log_event("Identity Layer Error in splitting messages")
+
+            
 
     def broadcast_message(self, message):
+        message=message+"\n"
         self.multi_sendsock.sendto(message.encode(), (self.multicast_address, self.multicast_port))
 
     def send_message(self,message: str):

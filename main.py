@@ -64,3 +64,10 @@ if __name__ == "__main__":
     #chat_generator = threading.Thread(target=generate_messages, args=(ui_layer, username), daemon=True)
     #chat_generator.start()
     ui_layer.start()
+
+    #ordering_layer.init()
+    #time.sleep(10)
+    #ordering_layer.send_message("ayush")
+    #time.sleep(3)
+    #ordering_layer.send_message("mittal")
+
