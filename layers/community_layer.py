@@ -126,7 +126,7 @@ class CommunityLayer:
             if(data["intended_id"]==self.id):
                 self.received_leader_response = True
                 if (data["vectclock"]!=None):
-                    self.ordering_layer.set_vectorclock(data["vectclock"])
+                    self.ordering_layer.int_vectorclock_seqnum(data["vectclock"])
             else :
                 self.ordering_layer.set_vectorclock_element(data["intended_id"],0)
 
