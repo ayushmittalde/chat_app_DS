@@ -120,11 +120,11 @@ class CommunityLayer:
                 self.ordering_layer.replay_holdbackqueue()  #Replaying holdback queue so that new node can fill all the messages
 
         elif(data["community_type"]=="WANT_TO_JOIN_RESPONSE"):
-            #abstract leader information
-            self.received_leader_response = True
             self.leader_id=data["leader_uuid"]
             self.update_groupview(data["participants"])
+
             if(data["intended_id"]==self.id):
+                self.received_leader_response = True
                 if (data["vectclock"]!=None):
                     self.ordering_layer.set_vectorclock(data["vectclock"])
             else :
@@ -142,7 +142,20 @@ class CommunityLayer:
             self.bully_message_queue.put(data)
 
         elif( (data["community_type"]== "TRY_JOIN_AGAIN" )and (data["intended_id"]==self.id)):
-            self.attempt_join()
+            if ((self.id==self.leader_id)and self.bullystate=="IDLE"): #this is to solve network partition.
+                time.sleep(2)   # Bully algo takes 2 seconds to update its state
+                if(self.bullystate=="IDLE"):
+                    message = {
+                    "community_type": "ELECTION",
+                    "election_type": "ATTEMPT_JOIN_FAIL",
+                    "peer_uuid": self.id
+                    }
+                    self.printk("OTH","Two leaders in the same group ")
+                    self.bully_message_queue.put(message)
+                else :
+                    self.attempt_join()
+            else:    
+                self.attempt_join()
             
         # New condition for chat messages
         elif data["community_type"] == "ORDERING":
@@ -271,7 +284,6 @@ class CommunityLayer:
                 self.started_election = False
                 self.printk("BULLY",f"Bully Algorithim next state {self.bullystate}")
 
-            time.sleep(0.5)  # Prevent busy-waiting
 
     def start_election(self): # Final 
         """

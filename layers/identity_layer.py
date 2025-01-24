@@ -157,8 +157,8 @@ class IdentityLayer:
         self.multi_sendsock=self.initialize_multicast_sendsocket()                  # initialize unicast channel
         self.log_event(f"Node initialized with UUID: {self.uuid} on port: {self.port} with pid : {os.getpid()}")
 
-        multilistener_thread = threading.Thread(target=self.multicast_listen, daemon=False)
-        unilistener_thread = threading.Thread(target=self.unicast_listen, daemon=False) 
+        multilistener_thread = threading.Thread(target=self.multicast_listen, daemon=True)
+        unilistener_thread = threading.Thread(target=self.unicast_listen, daemon=True) 
         multilistener_thread.start()
         unilistener_thread.start()
 

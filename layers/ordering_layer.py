@@ -37,9 +37,10 @@ class OrderingLayer:
         with self.vc_lock:
             return self.delievered_vc.copy()
     
-    def set_vectorclock(self,x:dict):  #Only called during node initialization
+    def int_vectorclock_seqnum(self,x:dict):  #Only called during node initialization, please do not call this function anywhere else , it resets the sequence number also
         with self.vc_lock:
             self.delievered_vc=x.copy()
+            self.seqnummer=0            
             self.printk("ORD",str(self.delievered_vc))
     
     def set_vectorclock_element(self, key, value):
@@ -48,7 +49,13 @@ class OrderingLayer:
 
     def get_vectorclock_element(self, key):
         with self.vc_lock:
-            return self.delievered_vc[key]
+            try:
+                return self.delievered_vc[key]
+            except KeyError:
+                self.printk("ORD",f"KeyError: The key '{key}' was not found in delievered_vc.")
+                self.printk("ORD",f"Vector clock {str(self.delievered_vc)}")
+                self.printk("ORD",f"Group View {str(self.community_layer.get_groupview_copy())}")
+                return -1
 
     def handle_message(self, message):
         data=json.loads(message)
