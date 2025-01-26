@@ -17,7 +17,6 @@ class CommunityLayer:
         self.received_leader_response = False 
         self.received_leader_heartbeat = False 
         self.running = False # used for heartbeat
-        self.message_history = ["Test1", "Test2","Test3"]  
         self.lock = threading.Lock()    #used for manipulating participants
         self.group_participants = {}  
         self.id=""
@@ -108,7 +107,7 @@ class CommunityLayer:
         """
         data=json.loads(message)                    # decodes json for the community layer
 
-        if (data["community_type"]=="WANT_TO_JOIN"):
+        if (data["community_type"]=="WANT_TO_JOIN"):    # Some new node wants to join the group
             if self.leader_id==self.id:
                 self.set_groupview(data["peer_uuid"],time.time())
                 x=data["peer_uuid"]
@@ -117,9 +116,10 @@ class CommunityLayer:
                 response=self.send_join_response(data["peer_uuid"])
                 self.send_response(response)
 
-                self.ordering_layer.replay_holdbackqueue()  #Replaying holdback queue so that new node can fill all the messages
+                self.ordering_layer.replay_holdbackqueue()  #Replaying holdback queue so that new node can replicate leader state
 
-        elif(data["community_type"]=="WANT_TO_JOIN_RESPONSE"):
+        # Leader sent the response to want to join message
+        elif(data["community_type"]=="WANT_TO_JOIN_RESPONSE"):  
             self.leader_id=data["leader_uuid"]
             self.update_groupview(data["participants"])
 
@@ -142,20 +142,13 @@ class CommunityLayer:
             self.bully_message_queue.put(data)
 
         elif( (data["community_type"]== "TRY_JOIN_AGAIN" )and (data["intended_id"]==self.id)):
-            if ((self.id==self.leader_id)and self.bullystate=="IDLE"): #this is to solve network partition.
-                time.sleep(2)   # Bully algo takes 2 seconds to update its state
-                if(self.bullystate=="IDLE"):
-                    message = {
-                    "community_type": "ELECTION",
-                    "election_type": "ATTEMPT_JOIN_FAIL",
-                    "peer_uuid": self.id
-                    }
-                    self.printk("OTH","Two leaders in the same group ")
-                    self.bully_message_queue.put(message)
-                else :
-                    self.attempt_join()
+            # This is to solve network partition
+            if (self.id==self.leader_id):           #Yes I am the leader
+                if(self.id<data["leader_uuid"]):    #But my ID is smaller than the other leader
+                    self.leader_id=""
+                    self.attempt_join()             # Stepping down,
             else:    
-                self.attempt_join()
+                self.attempt_join()                 #I am not the leader , I was a participant
             
         # New condition for chat messages
         elif data["community_type"] == "ORDERING":
@@ -173,7 +166,7 @@ class CommunityLayer:
     def tryjoinagain(self,id):
         response = {
             "community_type": "TRY_JOIN_AGAIN",
-            "leader_uuid":self.leader_id,
+            "leader_uuid":self.id,
             "intended_id": id
         }
         self.printk("GROUPVIEW",f"Received unknown heartbeat asking to join {response}")
@@ -185,7 +178,6 @@ class CommunityLayer:
 
         response = {
             "community_type": "WANT_TO_JOIN_RESPONSE",
-            "last_messages": self.message_history[-20:],
             "leader_uuid":self.leader_id,
             "participants": participant,
             "vectclock":vector_clock,
