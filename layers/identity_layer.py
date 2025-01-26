@@ -5,6 +5,11 @@ import random
 import json
 import os
 import threading
+
+# For stress testing: Increase the chances of a send or receive failure!
+TEST_FAILED_SEND_CHANCE = 0.0
+TEST_FAILED_RECEIEVE_CHANCE = 0.0
+
 """
 To do : 
 1. Implement meant for which can discard some straight forward messages like for 
@@ -72,7 +77,8 @@ class IdentityLayer:
 
         while True:
             data, addr = self.uni_sock.recvfrom(2048)  # Buffer size 2048 bytes
-            self.handle_message(data.decode())
+            if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
+                self.handle_message(data.decode())
 
     def unicast_send(self, message,id):
         msg = {
@@ -83,14 +89,16 @@ class IdentityLayer:
         }
         jsonmsg=json.dumps(msg)
         addr=self.directory[id]
-        self.uni_sock.sendto(jsonmsg.encode(), addr)  
+        if 1 - random.random() > TEST_FAILED_SEND_CHANCE:
+            self.uni_sock.sendto(jsonmsg.encode(), addr)  
           
     def multicast_listen(self):
         self.log_event("Listening to multicast messages...") 
 
         while True:
             data, addr = self.multi_sock.recvfrom(2048)
-            self.handle_message(data.decode())
+            if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
+                self.handle_message(data.decode())
 
     def multicast_send(self, message):
         msg = {
@@ -100,7 +108,8 @@ class IdentityLayer:
                 "payload":message
                 }
         jsonmsg=json.dumps(msg)
-        self.multi_sendsock.sendto(jsonmsg.encode(), (self.multicast_address, self.multicast_port))
+        if 1 - random.random() > TEST_FAILED_SEND_CHANCE:
+            self.multi_sendsock.sendto(jsonmsg.encode(), (self.multicast_address, self.multicast_port))
     
     def handle_message(self,message: str):
         data=json.loads(message)
