@@ -5,6 +5,7 @@ import random
 import json
 import os
 import threading
+import psutil
 """
 To do : 
 1. Implement meant for which can discard some straight forward messages like for 
@@ -27,11 +28,32 @@ class IdentityLayer:
         self.multicast_port = shared_data_instance.GROUP_PORT           
         self.directory ={}                                              # maps uuids to ip address and port
 
+    def get_wireless_interface(self):
+        """
+        Get the name of the wireless interface by checking available network interfaces.
+        """
+        wireless_keywords = ["wlan", "wi-fi", "wifi"]
+
+        for interface, addrs in psutil.net_if_addrs().items():
+            for addr in addrs:
+                if addr.family == socket.AF_INET:
+                    if any(keyword in interface.lower() for keyword in wireless_keywords):
+                        return interface, addr.address
+        raise Exception("No wireless interface found")
+  
     def initialize_multicast_sendsocket(self):
+        wireless_interface, wireless_ip = self.get_wireless_interface()
+        self.log_event(f"Using wireless interface: {wireless_interface}, IP: {wireless_ip}")
+        
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        
+        # Set the multicast interface before sending data
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(wireless_ip))
+
+        # Set TTL to control packet forwarding scope
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
         return sock
-    
+
     def initialize_multicast_listsocket(self):
         """
         Type : Socket
@@ -40,14 +62,17 @@ class IdentityLayer:
         Return : Socket Object
         
         """
+        wireless_interface, wireless_ip = self.get_wireless_interface()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(('', self.multicast_port))
+        sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
+        sock.bind(('0.0.0.0', self.multicast_port))
         sock.setsockopt(
             socket.IPPROTO_IP,
             socket.IP_ADD_MEMBERSHIP,
-            socket.inet_aton(self.multicast_address) + socket.inet_aton("0.0.0.0")
+            socket.inet_aton(self.multicast_address) + socket.inet_aton(wireless_ip)
         )
+
+        #sock.setsockopt(socket.IP_MULTICAST_IF,socket.inet_aton(wireless_ip))
         return sock
 
     def initialize_unicast_socket(self):
