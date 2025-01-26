@@ -28,23 +28,12 @@ class ReliabilityLayer:
         #     case REQUEST_KEYWORD:
         #     case RESPONSE_KEYWORD:
         #     case RELIABLE_KEYWORD:
-        self.community_layer.handle_message(message)
-         
-    def send_message(self, message: str):
-        self.identity_layer.send_message(message)
-
-    def send_response(self,response):
-        self.identity_layer.send_message(response)
-
-    def broadcast_elecmsg(self,response,id):
-        self.identity_layer.broadcast_elecmsg(response,id)
-
-    def send_heartbeat(self,response):
-        self.identity_layer.broadcast_heartbeat(response)
-    
+        msg=json.loads(message)
+        self.community_layer.handle_message(msg["payload"])
+          
     def send_unreliably(self,
                         payload: str,
-                        destination: tuple[str,int] | None,
+                        destination: str | None,
                         ):
         rel_payload = {
             "rel_type": UNRELIABLE_KEYWORD,
@@ -52,9 +41,9 @@ class ReliabilityLayer:
         }
         encoded_rel_payload = json.dumps(rel_payload)
         if destination is None:
-            self.identity_layer.broadcast_message(encoded_rel_payload)
+            self.identity_layer.multicast_send(encoded_rel_payload)
         else:
-            self.identity_layer.unicast_message(encoded_rel_payload,
+            self.identity_layer.unicast_send(encoded_rel_payload,
                                                 destination)
     
     def send_reliably(self,
@@ -118,9 +107,9 @@ class ReliabilityLayer:
             }
             encoded_rel_payload = json.dumps(rel_payload)
             if convo_copy.destination is None:
-                self.identity_layer.broadcast_message(encoded_rel_payload)
+                self.identity_layer.multicast_send(encoded_rel_payload)
             else:
-                self.identity_layer.unicast_message(encoded_rel_payload, 
+                self.identity_layer.unicast_send(encoded_rel_payload, 
                                                     convo_copy.destination)
             # Wait out the timeout
             time.sleep(convo_copy.timeout)

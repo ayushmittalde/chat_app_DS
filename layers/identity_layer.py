@@ -74,8 +74,16 @@ class IdentityLayer:
             data, addr = self.uni_sock.recvfrom(1024)  # Buffer size 1024 bytes
             self.handle_message(data.decode())
 
-    def unicast_message(self, message,addr):
-        self.uni_sock.sendto(message.encode(), addr)  
+    def unicast_send(self, message,id):
+        msg = {
+        "peer_uuid": str(self.uuid),
+        "peer_unicast_id":self.local_ip,
+        "peer_unicast_port":self.port,
+        "payload":message
+        }
+        jsonmsg=json.dumps(msg)
+        addr=self.directory[id]
+        self.uni_sock.sendto(jsonmsg.encode(), addr)  
           
     def multicast_listen(self):
         self.log_event("Listening to multicast messages...") 
@@ -84,55 +92,21 @@ class IdentityLayer:
             data, addr = self.multi_sock.recvfrom(1024)
             self.handle_message(data.decode())
 
-    def broadcast_message(self, message):
-        self.multi_sendsock.sendto(message.encode(), (self.multicast_address, self.multicast_port))
-
-    def send_message(self,message: str):
+    def multicast_send(self, message):
         msg = {
-                "identity_type": "MESSAGE",
                 "peer_uuid": str(self.uuid),
                 "peer_unicast_id":self.local_ip,
                 "peer_unicast_port":self.port,
                 "payload":message
                 }
-        self.broadcast_message(json.dumps(msg))
-
-    def broadcast_heartbeat(self,message):
-        beat = {
-                "identity_type": "HEARTBEAT",
-                "peer_uuid": str(self.uuid),
-                "peer_unicast_id":self.local_ip,
-                "peer_unicast_port":self.port,
-                "payload":message
-                }
-        self.broadcast_message(json.dumps(beat))
+        jsonmsg=json.dumps(msg)
+        self.multi_sendsock.sendto(jsonmsg.encode(), (self.multicast_address, self.multicast_port))
     
-    def broadcast_elecmsg(self,message,id):
-        """
-        Type : Network
-        Purpose : Sends election messages either on unicast channel to a specific address or broadcast to everyone (co-ordinator) message
-        Args : message to be sent , id = uuid or NULL(broadcast to all)
-        Return : Nothing
-        """
-        election = {
-        "identity_type": "ELECTION",
-        "peer_uuid": str(self.uuid),
-        "peer_unicast_id":self.local_ip,
-        "peer_unicast_port":self.port,
-        "payload":message
-        }
-        if (id == "NULL"): # broadcast to everone (co-ordinator message)
-            self.broadcast_message(json.dumps(election))
-        else :
-            addr=self.directory[id]
-            self.unicast_message(json.dumps(election),addr)
-
     def handle_message(self,message: str):
         data=json.loads(message)
         self.directory[data["peer_uuid"]] = (data["peer_unicast_id"],int(data["peer_unicast_port"]))
         self.reliability_layer.handle_message(data["payload"])
 
-    
     def set_reliability_layer(self, reliability_layer):
         from .reliability_layer import ReliabilityLayer
         self.reliability_layer: ReliabilityLayer = reliability_layer
