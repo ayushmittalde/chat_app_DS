@@ -2,6 +2,7 @@ from collections import deque
 from typing import Callable
 import urwid
 import json
+from layers.config import shared_data_instance
 
 FRAME_UPDATE_INTERVAL = 0.5
 
@@ -14,6 +15,7 @@ class UILayer:
         self.event_log: deque[str] = deque(maxlen=300)
         self.chat_log: deque[str] = deque(maxlen=300)
         self.status_msg: str = "Not connected"
+        self.node_uuid=""
         self._setup_ui()
 
     def _setup_ui(self):
@@ -70,10 +72,21 @@ class UILayer:
         if (data["ui_type"]=="chat"):
             self.deliver_message(data["sender"],data["content"])
 
+    # def log_event(self, event_message: str):
+    #     """Add this message to the UI's event log"""
+    #     self.event_log.append("$ " + event_message + "\n")
+    #     self.ui_events_text.set_text(list(reversed(self.event_log)))
+
     def log_event(self, event_message: str):
-        """Add this message to the UI's event log"""
         self.event_log.append("$ " + event_message + "\n")
         self.ui_events_text.set_text(list(reversed(self.event_log)))
+
+        if shared_data_instance.DEBUG==True:
+            if not hasattr(self, 'log_file'):
+                log_filename = f"{self.node_uuid}.log"
+                self.log_file = open(log_filename, "a")
+            self.log_file.write(event_message + "\n")
+            self.log_file.flush()
     
     def deliver_message(self, sender_name: str, message_text: str):
         """Add this message to the UI's chat log"""
@@ -93,7 +106,10 @@ class UILayer:
         self.main_loop.set_alarm_in(FRAME_UPDATE_INTERVAL, self._refresh_screen_loop)
         
     def start(self):
+        self.node_uuid=str(self.application_layer.ordering_layer.community_layer.reliablity_layer.identity_layer.uuid)
         self.application_layer.init()
+        self.set_status(self.node_uuid[:4])
         self.main_loop = urwid.MainLoop(self.ui_frame, self.palette, unhandled_input=self._unhandled)
         self.main_loop.set_alarm_in(FRAME_UPDATE_INTERVAL, self._refresh_screen_loop)
         self.main_loop.run()
+        

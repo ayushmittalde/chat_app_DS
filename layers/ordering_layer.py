@@ -55,7 +55,7 @@ class OrderingLayer:
                 self.printk("ORD",f"KeyError: The key '{key}' was not found in delievered_vc.")
                 self.printk("ORD",f"Vector clock {str(self.delievered_vc)}")
                 self.printk("ORD",f"Group View {str(self.community_layer.get_groupview_copy())}")
-                return -1
+                return -2
 
     def handle_message(self, message):
         data=json.loads(message)
