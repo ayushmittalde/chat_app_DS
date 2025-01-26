@@ -58,6 +58,13 @@ class CommunityLayer:
         with self.lock:
             for key in self.group_participants:
                 self.printk("GROUPVIEW","Group view :"+key[:4])
+    
+    def get_all_foreign_groupview_uuids(self) -> list[str]:
+        with self.lock:
+            uuids = list(self.group_participants.keys())
+        if self.id in uuids:
+            uuids.remove(self.id)
+        return uuids
 
     def group_view(self):
         while self.running:
@@ -135,7 +142,7 @@ class CommunityLayer:
             "community_type": "ORDERING",
             "content":message
         }
-        self.reliability_layer.send_unreliably(json.dumps(data),None)
+        self.reliability_layer.send_reliably(json.dumps(data), self.get_all_foreign_groupview_uuids())
 
     def tryjoinagain(self,id):
         response = {
@@ -174,9 +181,9 @@ class CommunityLayer:
         Return : Nothing
         """
         if (key == "NULL"):
-            self.reliability_layer.send_unreliably(json.dumps(message),None)  
+            self.reliability_layer.send_reliably(json.dumps(message), self.get_all_foreign_groupview_uuids())  
         else :
-            self.reliability_layer.send_unreliably(json.dumps(message),key)   
+            self.reliability_layer.send_reliably(json.dumps(message), [key])
 
     #### Message Handling ####
     #### Heart Beat ####
@@ -202,10 +209,6 @@ class CommunityLayer:
         self.running = False
         
     #### Heart Beat ####
-
-    def handle_delivery_failure(self, convo_id: int):
-        """Called by the reliability layer when delivering a reliable message failed"""
-        pass # TODO
 
     #### Bully Algorithim ###
 

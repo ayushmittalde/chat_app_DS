@@ -71,7 +71,7 @@ class IdentityLayer:
         self.log_event(f"Listening for UDP messages on port {self.port}...")
 
         while True:
-            data, addr = self.uni_sock.recvfrom(1024)  # Buffer size 1024 bytes
+            data, addr = self.uni_sock.recvfrom(2048)  # Buffer size 2048 bytes
             self.handle_message(data.decode())
 
     def unicast_send(self, message,id):
@@ -89,7 +89,7 @@ class IdentityLayer:
         self.log_event("Listening to multicast messages...") 
 
         while True:
-            data, addr = self.multi_sock.recvfrom(1024)
+            data, addr = self.multi_sock.recvfrom(2048)
             self.handle_message(data.decode())
 
     def multicast_send(self, message):
