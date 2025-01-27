@@ -28,6 +28,13 @@ def generate_messages(chat_ui, username):
         counter += 1
         time.sleep(3.3)
 
+def generate_statuses(ui_layer):
+    counter = 0
+    while True:
+        ui_layer.set_status(f"{counter} seconds have passed")
+        counter += 1
+        time.sleep(1)
+
 if __name__ == "__main__":
     # TODO: Integrate the username querying into a single UI system
     # Query the user for an user name
@@ -63,4 +70,6 @@ if __name__ == "__main__":
     #event_generator.start()
     #chat_generator = threading.Thread(target=generate_messages, args=(ui_layer, username), daemon=True)
     #chat_generator.start()
+    status_generator = threading.Thread(target=generate_statuses, args=(ui_layer,), daemon=True)
+    status_generator.start()
     ui_layer.start()
