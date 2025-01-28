@@ -111,10 +111,10 @@ class CommunityLayer:
             if self.leader_id==self.id:
                 self.set_groupview(data["peer_uuid"],time.time())
                 x=data["peer_uuid"]
-                self.printk("COMM",f"debug {x}")
+                self.printk("COMM",f"member added to group view {x}")
                 self.ordering_layer.set_vectorclock_element(data["peer_uuid"],0)
                 response=self.send_join_response(data["peer_uuid"])
-                self.send_response(response)
+                self.send_commlay_msg(response)
 
                 self.ordering_layer.replay_holdbackqueue()  #Replaying holdback queue so that new node can replicate leader state
 
@@ -155,13 +155,13 @@ class CommunityLayer:
             # Pass the chat message to the Ordering Layer
             self.ordering_layer.handle_message(data["content"])
 
-    #Send function can only be called by ordering layer , please use send_response function if you want to send something from community layer
+    #Send function can only be called by ordering layer , please use send_commlay_msg function if you want to send something from community layer
     def send_message(self,message): 
         data = {
             "community_type": "ORDERING",
             "content":message
         }
-        self.reliablity_layer.send_message(json.dumps(data))
+        self.reliability_layer.send_unreliably(json.dumps(data),None)
 
     def tryjoinagain(self,id):
         response = {
@@ -170,7 +170,7 @@ class CommunityLayer:
             "intended_id": id
         }
         self.printk("GROUPVIEW",f"Received unknown heartbeat asking to join {response}")
-        self.send_response(response)
+        self.send_commlay_msg(response)
 
     def send_join_response(self,id):
         participant=self.get_groupview_copy()
@@ -185,7 +185,7 @@ class CommunityLayer:
         }
         return response
 
-    def send_response(self,response):
+    def send_commlay_msg(self,response):#used for sending messages from community layer
         """
         Type : Message Handling
         Purpose : Send response to Identity layer
@@ -193,7 +193,7 @@ class CommunityLayer:
         Return : Nothing
         
         """
-        self.reliablity_layer.send_response(json.dumps(response))
+        self.reliability_layer.send_unreliably(json.dumps(response),None)
 
     def broadcast_elecmsg(self,message,key):
         """
@@ -202,7 +202,10 @@ class CommunityLayer:
         Args : python dictionary
         Return : Nothing
         """
-        self.reliablity_layer.broadcast_elecmsg(json.dumps(message),key)  
+        if (key == "NULL"):
+            self.reliability_layer.send_unreliably(json.dumps(message),None)  
+        else :
+            self.reliability_layer.send_unreliably(json.dumps(message),key)   
 
     #### Message Handling ####
     #### Heart Beat ####
@@ -221,13 +224,17 @@ class CommunityLayer:
             "community_type": "HEARTBEAT",
             "peer_uuid": self.id
             }
-            self.reliablity_layer.send_heartbeat(json.dumps(beat))
+            self.send_commlay_msg(beat)
             time.sleep(shared_data_instance.HEARTBEAT_INT) 
     
     def stop_heartbeat(self):
         self.running = False
         
     #### Heart Beat ####
+
+    def handle_delivery_failure(self, convo_id: int):
+        """Called by the reliability layer when delivering a reliable message failed"""
+        pass # TODO
 
     #### Bully Algorithim ###
 
@@ -525,7 +532,7 @@ class CommunityLayer:
                     "peer_uuid": self.id
                 }
 
-                self.send_response(message)
+                self.send_commlay_msg(message)
 
                 start_time = time.time()
                 while time.time() - start_time < delay:
@@ -548,13 +555,13 @@ class CommunityLayer:
         from .ordering_layer import OrderingLayer
         self.ordering_layer: OrderingLayer = ordering_layer
 
-    def set_reliablity_layer(self, reliability_layer):
+    def set_reliability_layer(self, reliability_layer):
         from .reliability_layer import ReliabilityLayer
-        self.reliablity_layer: ReliabilityLayer = reliability_layer
+        self.reliability_layer: ReliabilityLayer = reliability_layer
 
     def init(self):
-        self.id=str(self.reliablity_layer.identity_layer.uuid)
-        self.reliablity_layer.init()
+        self.id=str(self.reliability_layer.identity_layer.uuid)
+        self.reliability_layer.init()
         self.group_participants[self.id]=time.time()
         self.ordering_layer.set_vectorclock_element(self.id,0)
         

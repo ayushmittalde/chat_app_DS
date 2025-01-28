@@ -20,7 +20,7 @@ shared_data_instance = SharedData()
 Community type :
 message={
         "community_type": "WANT_TO_JOIN",
-        "peer_uuid": str(self.reliablity_layer.identity_layer.uuid)
+        "peer_uuid": str(self.reliability_layer.identity_layer.uuid)
         }
 
 response = {
@@ -31,7 +31,7 @@ response = {
 
 beat = {
 "community_type": "HEARTBEAT",
-"peer_uuid": str(self.reliablity_layer.identity_layer.uuid)
+"peer_uuid": str(self.reliability_layer.identity_layer.uuid)
 }
 """
 

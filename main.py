@@ -54,7 +54,7 @@ if __name__ == "__main__":
     ordering_layer.set_application_layer(application_layer)
     ordering_layer.set_community_layer(community_layer)
     community_layer.set_ordering_layer(ordering_layer)
-    community_layer.set_reliablity_layer(reliability_layer)
+    community_layer.set_reliability_layer(reliability_layer)
     reliability_layer.set_community_layer(community_layer)
     reliability_layer.set_identity_layer(identity_layer)
     identity_layer.set_reliability_layer(reliability_layer)
