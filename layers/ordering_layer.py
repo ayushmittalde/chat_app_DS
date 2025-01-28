@@ -179,7 +179,7 @@ class OrderingLayer:
         self.community_layer: CommunityLayer = community_layer
 
     def init(self):
-        self.node_uuid=str(self.community_layer.reliablity_layer.identity_layer.uuid)
+        self.node_uuid=str(self.community_layer.reliability_layer.identity_layer.uuid)
         self.community_layer.init()
 
         log_thread = threading.Thread(target=self.recv_log, daemon=True)

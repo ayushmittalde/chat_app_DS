@@ -106,7 +106,7 @@ class UILayer:
         self.main_loop.set_alarm_in(FRAME_UPDATE_INTERVAL, self._refresh_screen_loop)
         
     def start(self):
-        self.node_uuid=str(self.application_layer.ordering_layer.community_layer.reliablity_layer.identity_layer.uuid)
+        self.node_uuid=str(self.application_layer.ordering_layer.community_layer.reliability_layer.identity_layer.uuid)
         self.application_layer.init()
         self.set_status(self.node_uuid[:4])
         self.main_loop = urwid.MainLoop(self.ui_frame, self.palette, unhandled_input=self._unhandled)
