@@ -107,7 +107,8 @@ class CommunityLayer:
         """
         data=json.loads(message)                    # decodes json for the community layer
 
-        if (data["community_type"]=="WANT_TO_JOIN"):    # Some new node wants to join the group
+        # Some new node wants to join the group
+        if (data["community_type"]=="WANT_TO_JOIN"):    
             if self.leader_id==self.id:
                 self.set_groupview(data["peer_uuid"],time.time())
                 x=data["peer_uuid"]
@@ -130,19 +131,25 @@ class CommunityLayer:
             else :
                 self.ordering_layer.set_vectorclock_element(data["intended_id"],0)
 
+        # received heartbeat from node
         elif(data["community_type"]=="HEARTBEAT"):
             if (self.get_groupview(data["peer_uuid"])!=None):
                 self.set_groupview(data["peer_uuid"],time.time())
             else :
+                # received heartbeat from a node who is not part of group view
                 if(self.id==self.leader_id):
+                    # asking the node to try to join the group again
                     self.tryjoinagain(data["peer_uuid"])
                     self.printk("COMM",f"{data} ignored in heartbeat")
 
         elif(data["community_type"]=="ELECTION"):
+            # all election messages are passed to Bully algorithim state machine
             self.bully_message_queue.put(data)
 
         elif( (data["community_type"]== "TRY_JOIN_AGAIN" )and (data["intended_id"]==self.id)):
-            # This is to solve network partition
+            # Leader asking to join again
+
+            # There can be case where two leaders are present in a single multicast group. Example a node shifting from one router to another or node connecting back after network partition
             if (self.id==self.leader_id):           #Yes I am the leader
                 if(self.id<data["leader_uuid"]):    #But my ID is smaller than the other leader
                     self.leader_id=""
@@ -330,22 +337,18 @@ class CommunityLayer:
         if got_message==True:
             got_message=False
             # Check if a RESPONSE message is received
-            # This will change the state to "WAITING COD"
+            # do not process , should not happen
             if (self.received_response_message(message)==True):  
-                # do not process , should not happen 
                 pass
             
             # Check if an ELECTION message is received
+            # Respond to the election message and start the election
             elif self.received_election_message(message):  
-                # Respond to the election message
                 id =message["peer_uuid"]
                 self.send_response_message(id)
                 self.bullystate="ELECTION"
 
             # Check if a COORDINATOR message is received
-            # Stop election process and acknowledge the new leader
-            # Change the state to IDLE
-            #Election Ended
             elif self.received_coordinator_message(message):  
                 id =message["peer_uuid"]
                 self.acknowledge_coordinator_message(id)
@@ -353,7 +356,7 @@ class CommunityLayer:
 
             #special case when we receive CO-OD from a lower id , we should start an election
             elif (message["peer_uuid"]<self.id and message["election_type"]=="COORDINATOR"):
-                # Our id is bigger than ours so wrong election 
+                # Our id is bigger than ours so something has gone wrong at this stage.
                 self.bullystate="ELECTION"
             
             elif ((message["election_type"]=="ATTEMPT_JOIN_FAIL") or (message["election_type"]== "LEADER_FAIL")):
@@ -420,7 +423,8 @@ class CommunityLayer:
             self.printk("BULLY",f"Message ignored as election {message}")
             return False
         
-    def received_coordinator_message(self,message): #Final , correct
+        # Only process CO-ORDINATOR message from a higher uuid
+    def received_coordinator_message(self,message):
         if (message["election_type"]=="COORDINATOR" and (message["peer_uuid"]>self.id) ):
             self.printk("BULLY",f"Message processed as co-ordinator {message}")
             return True
@@ -429,6 +433,7 @@ class CommunityLayer:
             self.printk("BULLY",f"Message ignored as co-ordinator {message}")
             return False
     
+        # construct RESPONSE message for the reply 
     def send_response_message(self, peer_uuid): #Final , correct
         """
         Send a RESPONSE message back to the peer UUID.
