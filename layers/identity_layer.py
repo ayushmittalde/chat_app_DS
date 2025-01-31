@@ -6,6 +6,11 @@ import json
 import os
 import threading
 import psutil
+
+# For stress testing: Increase the chances of a send or receive failure!
+TEST_FAILED_SEND_CHANCE = 0.0
+TEST_FAILED_RECEIEVE_CHANCE = 0.0
+
 """
 To do : 
 1. Implement meant for which can discard some straight forward messages like for 
@@ -96,14 +101,14 @@ class IdentityLayer:
         self.log_event(f"Listening for UDP messages on port {self.port}...")
 
         while True:
-            data, addr = self.uni_sock.recvfrom(2048)  # Buffer size 1024 bytes
+            data, addr = self.uni_sock.recvfrom(2048)  # Buffer size 2048 bytes
             messages=data.decode().strip().split("\n")
-            for msg in messages:
-                try:
-                    self.handle_message(msg)
-                except:
-                    self.log_event("Identity Layer Error in splitting messages")
-
+            if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
+                for msg in messages:
+                    try:
+                        self.handle_message(msg)
+                    except:
+                        self.log_event("Identity Layer Error in splitting messages")
 
     def unicast_send(self, message,id):
         msg = {
@@ -115,7 +120,8 @@ class IdentityLayer:
         jsonmsg=json.dumps(msg)
         jsonmsg=jsonmsg+"\n"
         addr=self.directory[id]
-        self.uni_sock.sendto(jsonmsg.encode(), addr)  
+        if 1 - random.random() > TEST_FAILED_SEND_CHANCE:
+            self.uni_sock.sendto(jsonmsg.encode(), addr)  
           
     def multicast_listen(self):
         self.log_event("Listening to multicast messages...") 
@@ -123,11 +129,12 @@ class IdentityLayer:
         while True:
             data, addr = self.multi_sock.recvfrom(2048)
             messages=data.decode().strip().split("\n")
-            for msg in messages:
-                try:
-                    self.handle_message(msg)
-                except:
-                    self.log_event("Identity Layer Error in splitting messages")
+            if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
+                for msg in messages:
+                    try:
+                        self.handle_message(msg)
+                    except:
+                        self.log_event("Identity Layer Error in splitting messages")
 
     def multicast_send(self, message):
         msg = {
@@ -138,7 +145,8 @@ class IdentityLayer:
                 }
         jsonmsg=json.dumps(msg)
         jsonmsg=jsonmsg+"\n"
-        self.multi_sendsock.sendto(jsonmsg.encode(), (self.multicast_address, self.multicast_port))
+        if 1 - random.random() > TEST_FAILED_SEND_CHANCE:
+            self.multi_sendsock.sendto(jsonmsg.encode(), (self.multicast_address, self.multicast_port))
     
     def handle_message(self,message: str):
         data=json.loads(message)
