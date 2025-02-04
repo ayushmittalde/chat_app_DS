@@ -219,7 +219,7 @@ class CommunityLayer:
         if (key == "NULL"):
             self.reliability_layer.send_reliably(json.dumps(message), self.get_all_foreign_groupview_uuids())  
         else :
-            self.reliability_layer.send_reliably(json.dumps(message), [key])
+            self.reliability_layer.send_reliably(json.dumps(message), key)
 
     #### Message Handling ####
     #### Heart Beat ####

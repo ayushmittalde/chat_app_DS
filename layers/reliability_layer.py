@@ -15,6 +15,7 @@ UNRELIABLE_KEYWORD = "unreliable"
 ACK_KEYWORD = "acknowledgemet"
 
 RECEIVED_PACKAGE_EXPIRATION = 40
+MULTICAST_MIN_TRIES = 8
 
 class ReliabilityLayer:
 
@@ -26,7 +27,7 @@ class ReliabilityLayer:
 
     def handle_message(self, message: str):
         decoded_package = json.loads(message)
-        # FIXME: Right now we want our own packages back?
+        # If we don't want feedback:
         # if decoded_package["sender_uuid"] == str(self.identity_layer.uuid):
         #     # Don't process messages from yourself
         #     return
@@ -91,7 +92,7 @@ class ReliabilityLayer:
     
     def send_reliably(self,
                       payload: str,
-                      destinations: list[str],
+                      destinations: str | list[str],
                       tries: int = 15,
                       timeout: float = 1.5,
                       ):
@@ -102,8 +103,10 @@ class ReliabilityLayer:
         payload : str
             A string that the destination reliability layer will propagate to
             its community layer via handle_message()
-        destination : list[str]
-            A list of recipients that are supposed to receive the package
+        destinations : str | list[str]
+            A list of recipients that are supposed to receive the package.
+            Iif a list is provided multicast will be used, even if that list has
+            0 or just 1 element.
         tries : int
             How many times the package should be resent before giving up
             (default: 15)
@@ -115,6 +118,16 @@ class ReliabilityLayer:
             return
         if tries < 1:
             return
+        # Determine whether we're using unicast or multicast
+        if type(destinations) is str:
+            multicast = False
+            destinations_list: list[str] = [destinations]
+        else:
+            multicast = True
+            destinations_list: list[str] = destinations # type: ignore
+        # In case of multicast, add yourself to the recipients for feedback
+        if multicast and str(self.identity_layer.uuid) not in destinations_list:
+            destinations_list.append(str(self.identity_layer.uuid))
         # Generate unique message id
         self.message_id_counter += 1
         reliability_id = self.message_id_counter
@@ -123,9 +136,11 @@ class ReliabilityLayer:
             self.conversations[reliability_id] = Conversation(
                 reliability_id=reliability_id,
                 payload=payload,
-                destinations_remaining=destinations,
+                destinations_remaining=destinations_list,
+                multicast=multicast,
                 timeout=timeout,
-                tries_left=tries,
+                tries_made=0,
+                max_tries=tries,
             )
         # Start resend loop
         threading.Thread(target=self._reliable_send_loop,
@@ -143,14 +158,23 @@ class ReliabilityLayer:
                 self.lock.release()
                 return
             # If the conversation ran out of tries
-            if convo.tries_left <= 0:
+            if convo.max_tries - convo.tries_made <= 0:
+                # Clean up info about conversation
+                self.conversations.pop(convo.reliability_id)
+                self.lock.release()
+                return
+            # If everyone acknowledged it already
+            if len(convo.destinations_remaining) == 0 and (
+                not convo.multicast or
+                convo.tries_made >= MULTICAST_MIN_TRIES
+            ):
                 # Clean up info about conversation
                 self.conversations.pop(convo.reliability_id)
                 self.lock.release()
                 return
             # (Re)send message
-            convo.tries_left -= 1
-            convo_copy = copy.copy(convo)
+            convo.tries_made += 1
+            convo_copy = copy.deepcopy(convo)
             self.lock.release()
             rel_payload = {
                 "rel_type": RELIABLE_KEYWORD,
@@ -159,12 +183,12 @@ class ReliabilityLayer:
                 "payload": convo_copy.payload,
             }
             encoded_rel_payload = json.dumps(rel_payload)
-            if len(convo_copy.destinations_remaining) > 1:
+            if convo_copy.multicast:
                 self.identity_layer.multicast_send(encoded_rel_payload)
             else:
                 self.identity_layer.unicast_send(encoded_rel_payload, 
                     convo_copy.destinations_remaining[0])
-            self.log_event(f"REL {reliability_id} sent, {convo_copy.tries_left} tries remaining, {len(convo_copy.destinations_remaining)} ACKs remaining")
+            self.log_event(f"REL {reliability_id} sent, try {convo_copy.tries_made}, {len(convo_copy.destinations_remaining)} ACKs remaining")
             # Wait out the timeout
             time.sleep(convo_copy.timeout)
     
@@ -208,9 +232,6 @@ class ReliabilityLayer:
                 return
             if sender_uuid in conversation.destinations_remaining:
                 conversation.destinations_remaining.remove(sender_uuid)
-            # If there are no acknowledgers remaining, forget the conversation
-            if len(conversation.destinations_remaining) == 0:
-                self.conversations.pop(reliability_id)
 
     def set_community_layer(self, community_layer):
         from .community_layer import CommunityLayer
@@ -231,8 +252,10 @@ class Conversation:
     reliability_id: int
     payload: str
     destinations_remaining: list[str]
+    multicast: bool
     timeout: float
-    tries_left: int
+    tries_made: int
+    max_tries: int
 
 @dataclass
 class ReceivedPackage:
