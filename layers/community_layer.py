@@ -5,11 +5,7 @@ from layers.config import shared_data_instance
 import random
 import time
 import queue
-"""
-To do: 
-make use of the address in handle message
 
-"""
 class CommunityLayer:
     def __init__(self):
         self.retry_count = 0 
@@ -20,6 +16,7 @@ class CommunityLayer:
         self.lock = threading.Lock()    #used for manipulating participants
         self.group_participants = {}  
         self.id=""
+        self.attempt_join_running=False
         ### Variables for Bully algorithim 
         self.bully_message_queue = queue.Queue()
         self.bullystate = "IDLE"
@@ -154,7 +151,8 @@ class CommunityLayer:
 
         elif(data["community_type"]=="ELECTION"):
             # all election messages are passed to Bully algorithim state machine
-            self.bully_message_queue.put(data)
+            if (self.get_groupview(data["sender_id"])!=None):
+                self.bully_message_queue.put(data)
 
         elif( (data["community_type"]== "TRY_JOIN_AGAIN" )and (data["intended_id"]==self.id)):
             # Leader asking to join again
@@ -548,6 +546,7 @@ class CommunityLayer:
     #### Bully Algorithim ####
 
     def attempt_join(self):
+        self.attempt_join_running=True
         joined = False
         delay = 1
         for attempt in range(self.max_retries):
@@ -574,9 +573,11 @@ class CommunityLayer:
 
         self.received_leader_response=False
         if not joined:
+            self.attempt_join_running=False
             return False
         else:
             self.printk("OTH","Node successfully joined the group!")
+            self.attempt_join_running=False
             return True
 
     def set_ordering_layer(self, ordering_layer):
@@ -614,7 +615,10 @@ class CommunityLayer:
 
     # starts election if no leader for 10 seconds found after the birth
     def start_elec_ifnolead(self):
-        time.sleep(10)
+        time.sleep(20)
+        while(self.attempt_join_running==True):
+            pass
+
         if (self.leader_id=="NULL"):
             message = {
                 "community_type": "ELECTION",

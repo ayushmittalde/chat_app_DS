@@ -28,11 +28,13 @@ class IdentityLayer:
         """
         self.uuid = uuid.uuid4()
         self.is_leader = False
-        self.port =-1       #unicast port
+        self.port=random.randint(10000, 11000) 
         self.local_ip=""    # unicast ip
         self.multicast_address = shared_data_instance.GROUP_ADDRESS
         self.multicast_port = shared_data_instance.GROUP_PORT           
         self.directory ={}                                              # maps uuids to ip address and port
+        self.received_buffer_unicast=""
+        self.receive_buffer=""
 
     def get_wireless_interface(self):
         """
@@ -89,7 +91,6 @@ class IdentityLayer:
 
         while not trying_bind:
             try:
-                self.port=random.randint(10000, 11000) 
                 sock.bind(('', self.port))
                 trying_bind=True
             except:
@@ -103,18 +104,29 @@ class IdentityLayer:
 
         while True:
             try:
-                data, addr = self.uni_sock.recvfrom(2048)  # Buffer size 2048 bytes
-                messages=data.decode().strip().split("\n")
+                data, addr = self.uni_sock.recvfrom(2048)  # Receive up to 2048 bytes
+                received_data = data.decode()
+                self.received_buffer_unicast += received_data  # Append received data to buffer
+
+                # Process complete messages (split by "\n")
+                while "\n" in self.received_buffer_unicast:
+                    full_message, self.received_buffer_unicast = self.received_buffer_unicast.split("\n", 1)
+                    
+                    if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
+                        try:
+                            self.handle_message(full_message)
+                        except:
+                            self.log_event("Identity Layer Error in processing message")
+                            self.log_event(full_message)
+
             except Exception as e:
                 error_details = traceback.format_exc()  # Get full traceback
                 self.log_event(f"Error while receiving message on unicast channel: {str(e)}")
                 self.log_event(f"Traceback: {error_details}")
-            if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
-                for msg in messages:
-                    try:
-                        self.handle_message(msg)
-                    except:
-                        self.log_event("Identity Layer Error in splitting messages")
+
+                self.uni_sock.close()  # Close the current socket
+                self.uni_sock=self.initialize_unicast_socket() 
+                self.log_event(f"Reinit")  
 
     def unicast_send(self, message,id):
         msg = {
@@ -131,22 +143,28 @@ class IdentityLayer:
           
     def multicast_listen(self):
         self.log_event("Listening to multicast messages...") 
-
+        
         while True:
             try:
                 data, addr = self.multi_sock.recvfrom(2048)
-                messages=data.decode().strip().split("\n")
+                received_data = data.decode()
+                self.receive_buffer += received_data  # Append new data to buffer
+
+                # Process complete messages (split by "\n")
+                while "\n" in self.receive_buffer:
+                    full_message, self.receive_buffer = self.receive_buffer.split("\n", 1)
+                    
+                    if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
+                        try:
+                            self.handle_message(full_message)
+                        except:
+                            self.log_event("Identity Layer Error in processing message")
+                            self.log_event(full_message)
+
             except Exception as e:
                 error_details = traceback.format_exc()  # Get full traceback
                 self.log_event(f"Error while receiving message on multicast channel: {str(e)}")
                 self.log_event(f"Traceback: {error_details}")
-                
-            if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
-                for msg in messages:
-                    try:
-                        self.handle_message(msg)
-                    except:
-                        self.log_event("Identity Layer Error in splitting messages")
 
     def multicast_send(self, message):
         msg = {
