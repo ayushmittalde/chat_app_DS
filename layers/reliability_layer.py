@@ -27,10 +27,10 @@ class ReliabilityLayer:
 
     def handle_message(self, message: str):
         decoded_package = json.loads(message)
-        # If we don't want feedback:
-        # if decoded_package["sender_uuid"] == str(self.identity_layer.uuid):
-        #     # Don't process messages from yourself
-        #     return
+        if decoded_package["sender_uuid"] == str(self.identity_layer.uuid):
+            # Don't process messages from yourself
+            return
+        
         rel_type = decoded_package["rel_type"]
         if rel_type == UNRELIABLE_KEYWORD:
             self.community_layer.handle_message(decoded_package["payload"])

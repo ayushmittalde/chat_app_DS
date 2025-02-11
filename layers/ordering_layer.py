@@ -16,6 +16,8 @@ class OrderingLayer:
         self.hold_back_queue = []  
         self.seqnummer =0
         self.log_message_queue = queue.Queue()
+        self.send_message_queue = queue.Queue()
+        self.state=True
 
         # Lock for the log function
         self.log_lock = threading.Lock()
@@ -40,7 +42,8 @@ class OrderingLayer:
     def int_vectorclock_seqnum(self,x:dict):  #Only called during node initialization, please do not call this function anywhere else , it resets the sequence number also
         with self.vc_lock:
             self.delievered_vc=x.copy()
-            self.seqnummer=0            
+            self.seqnummer=0       
+            self.printk("ORD","Vector clock and sequence number initialized")     
             self.printk("ORD",str(self.delievered_vc))
     
     def set_vectorclock_element(self, key, value):
@@ -62,16 +65,35 @@ class OrderingLayer:
         self.process_message_queue.put(data)
 
     def send_message(self,response):
-        self.deps=self.get_vectorclock_copy()
-        self.seqnummer+=1
-        self.deps[self.node_uuid]=self.seqnummer
-        message = {
-            "ordering_type": "APPLICATION",
-            "content": response,
-            "vector_clock": self.deps,
-            "sender_uuid": self.node_uuid
-        }
-        self.community_layer.send_message(json.dumps(message))
+        self.send_message_queue.put(response)
+
+    # Messages are not sent while election is going on 
+    def send_message_thread(self):
+        while True:
+            if (self.state==True):
+                response=self.send_message_queue.get()
+                self.deps=self.get_vectorclock_copy()
+                self.seqnummer+=1
+                self.deps[self.node_uuid]=self.seqnummer
+                message = {
+                    "ordering_type": "APPLICATION",
+                    "content": response,
+                    "vector_clock": self.deps,
+                    "sender_uuid": self.node_uuid
+                }
+                self.community_layer.send_message(json.dumps(message))
+                # this is done to deliever the messages to itself
+                self.handle_message(json.dumps(message))
+
+    def monitorstate(self):
+        while True:
+            if (self.community_layer.bullystate != "IDLE"):
+                self.state=False
+            elif(self.state==False):
+                time.sleep(5)
+                if (self.community_layer.bullystate == "IDLE"):
+                    self.state=True
+
 
     def replay_holdbackqueue(self):
         holdback_thread = threading.Thread(target=self.holdbackqueureplay, daemon=True)
@@ -88,21 +110,29 @@ class OrderingLayer:
         while True:
             message=self.process_message_queue.get()
             """Process an incoming message with vector clock validation."""
+            # checking if the group view of the sender and receiver are consisten , If inconsistent , we deliever the message but with warning : 
+            received_vc = message["vector_clock"].copy()
+            groupview=self.community_layer.get_groupview_copy()
 
-            # Check if the message can be delivered BEFORE updating the local vector clock
-            if self.is_causally_ready(message):
-                self.deliver_message(message["content"])
-                self.update_vector_clock(message["sender_uuid"])
+            if received_vc.keys() == self.delievered_vc.keys():
+                # Check if the message can be delivered BEFORE updating the local vector clock
+                if self.is_causally_ready(message):
+                    self.deliver_message(message["content"])
+                    self.update_vector_clock(message["sender_uuid"])
+                else:
+                    sender_uuid = message["sender_uuid"]
+                    received_vc = message["vector_clock"].copy()
+                    if(self.get_vectorclock_element(sender_uuid)>received_vc[sender_uuid]):
+                        self.printk("ORD","Probably old message message ignored")
+                        self.printk("ORD", str(message["content"]))
+                        pass 
+                    else :
+                        self.append_hold_back_queue(message)
+
+                self.process_hold_back_queue()
             else:
-                sender_uuid = message["sender_uuid"]
-                received_vc = message["vector_clock"].copy()
-                if(self.get_vectorclock_element(sender_uuid)>received_vc[sender_uuid]):
-                    self.printk("ORD","message ignored")
-                    pass 
-                else :
-                    self.append_hold_back_queue(message)
-
-            self.process_hold_back_queue()
+                self.printk("ORD","Message Ignored, Inconsistent Groupview")
+                self.printk("ORD", str(message["content"]))
 
     def update_vector_clock(self,sender_uuid):
         """Update the local vector clock after processing the message."""
@@ -182,11 +212,17 @@ class OrderingLayer:
         self.node_uuid=str(self.community_layer.reliability_layer.identity_layer.uuid)
         self.community_layer.init()
 
+        monitor_thread = threading.Thread(target=self.monitorstate, daemon=True)
+        monitor_thread.start()
+
+        message_thread = threading.Thread(target=self.send_message_thread, daemon=True)
+        message_thread.start()
+
         log_thread = threading.Thread(target=self.recv_log, daemon=True)
         log_thread.start()
 
-        log_thread = threading.Thread(target=self.process_message, daemon=True)
-        log_thread.start()
+        proc_thread = threading.Thread(target=self.process_message, daemon=True)
+        proc_thread.start()
         
     def printk(self,type,message):
         self.log_message_queue.put((type,message))

@@ -83,8 +83,11 @@ class CommunityLayer:
             
             for key in list(participant.keys()):
                 if(now-participant[key]>=shared_data_instance.HEARTBEAT_TIMEOUT):
-                    del participant[key]
-                    #del vectorclock[key]
+                    if (key !=self.id):
+                        del participant[key]
+                    else :
+                        self.printk("GROUPVIEW","Tried to delete self")
+                        # Sometimes this happens at startup
                     
                     if (key==self.leader_id):
                         message = {
@@ -122,7 +125,7 @@ class CommunityLayer:
                 self.printk("COMM",f"member added to group view {x}")
                 self.ordering_layer.set_vectorclock_element(data["peer_uuid"],0)
                 response=self.send_join_response(data["peer_uuid"])
-                self.send_commlay_msg(response)
+                self.send_commlay_msg_rel(response)
 
                 self.ordering_layer.replay_holdbackqueue()  #Replaying holdback queue so that new node can replicate leader state
 
@@ -159,7 +162,7 @@ class CommunityLayer:
             # There can be case where two leaders are present in a single multicast group. Example a node shifting from one router to another or node connecting back after network partition
             if (self.id==self.leader_id):           #Yes I am the leader
                 if(self.id<data["leader_uuid"]):    #But my ID is smaller than the other leader
-                    self.leader_id=""
+                    self.leader_id="NULL"
                     self.attempt_join()             # Stepping down,
             else:    
                 self.attempt_join()                 #I am not the leader , I was a participant
@@ -167,13 +170,17 @@ class CommunityLayer:
         # New condition for chat messages
         elif data["community_type"] == "ORDERING":
             # Pass the chat message to the Ordering Layer
-            self.ordering_layer.handle_message(data["content"])
+            if (self.get_groupview(data["sender_id"])!=None):
+                self.ordering_layer.handle_message(data["content"])
+            else:
+                self.printk("COMM","Received app message from unknown participant ")
 
     #Send function can only be called by ordering layer , please use send_commlay_msg function if you want to send something from community layer
     def send_message(self,message): 
         data = {
             "community_type": "ORDERING",
-            "content":message
+            "content":message,
+            "sender_id":self.id
         }
         self.reliability_layer.send_reliably(json.dumps(data), self.get_all_foreign_groupview_uuids())
 
@@ -184,7 +191,7 @@ class CommunityLayer:
             "intended_id": id
         }
         self.printk("GROUPVIEW",f"Received unknown heartbeat asking to join {response}")
-        self.send_commlay_msg(response)
+        self.send_commlay_msg_unrel(response)
 
     def send_join_response(self,id):
         participant=self.get_groupview_copy()
@@ -199,7 +206,7 @@ class CommunityLayer:
         }
         return response
 
-    def send_commlay_msg(self,response):#used for sending messages from community layer
+    def send_commlay_msg_rel(self,response):#used for sending messages from community layer
         """
         Type : Message Handling
         Purpose : Send response to Identity layer
@@ -207,7 +214,17 @@ class CommunityLayer:
         Return : Nothing
         
         """
-        self.reliability_layer.send_unreliably(json.dumps(response),None)
+        self.reliability_layer.send_reliably(json.dumps(response), self.get_all_foreign_groupview_uuids())
+        
+    def send_commlay_msg_unrel(self,response):#used for sending messages from community layer
+        """
+        Type : Message Handling
+        Purpose : Send response to Identity layer
+        Args : python dictionary
+        Return : Nothing
+        
+        """
+        self.reliability_layer.send_unreliably(json.dumps(response),None) 
 
     def broadcast_elecmsg(self,message,key):
         """
@@ -238,7 +255,8 @@ class CommunityLayer:
             "community_type": "HEARTBEAT",
             "peer_uuid": self.id
             }
-            self.send_commlay_msg(beat)
+            self.send_commlay_msg_unrel(beat)
+            self.handle_message(json.dumps(beat)) # Handle its own heartbeat
             time.sleep(shared_data_instance.HEARTBEAT_INT) 
     
     def stop_heartbeat(self):
@@ -540,7 +558,7 @@ class CommunityLayer:
                     "peer_uuid": self.id
                 }
 
-                self.send_commlay_msg(message)
+                self.send_commlay_msg_unrel(message)
 
                 start_time = time.time()
                 while time.time() - start_time < delay:
@@ -553,6 +571,8 @@ class CommunityLayer:
                     break
             except Exception as e:
                 self.printk("OTH",f"Error attempting to join: {e}")
+
+        self.received_leader_response=False
         if not joined:
             return False
         else:
@@ -576,16 +596,26 @@ class CommunityLayer:
         log_thread = threading.Thread(target=self.recv_log, daemon=True)
         log_thread.start()
 
-        output =self.attempt_join()
-        #can lead to election
-        #starting Bully algorithim
+        self.attempt_join()
 
+        #starting Bully algorithim
         self.bullyrunning = True
         state_machine_thread = threading.Thread(target=self.state_machine, daemon=True)
         state_machine_thread.start()
+        
+        self.start_heartbeat()
 
-        if(not output):
-        # sending message to bully algorithim to start the election
+        # starts election if no leader for 10 seconds found after the birth
+        delayelect_thread = threading.Thread(target=self.start_elec_ifnolead, daemon=True)
+        delayelect_thread.start()
+
+    def printk(self,type,message):
+        self.log_message_queue.put((type,message))
+
+    # starts election if no leader for 10 seconds found after the birth
+    def start_elec_ifnolead(self):
+        time.sleep(10)
+        if (self.leader_id=="NULL"):
             message = {
                 "community_type": "ELECTION",
                 "election_type": "ATTEMPT_JOIN_FAIL",
@@ -593,12 +623,6 @@ class CommunityLayer:
             }
             self.printk("OTH","Failed to join after maximum retries. Starting election ")
             self.bully_message_queue.put(message)
-
-        #starting heartbeat and group view once we have participants
-        self.start_heartbeat()
-
-    def printk(self,type,message):
-        self.log_message_queue.put((type,message))
 
     def recv_log(self):
         while True:

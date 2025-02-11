@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import psutil
+import traceback
 
 # For stress testing: Increase the chances of a send or receive failure!
 TEST_FAILED_SEND_CHANCE = 0.0
@@ -101,8 +102,13 @@ class IdentityLayer:
         self.log_event(f"Listening for UDP messages on port {self.port}...")
 
         while True:
-            data, addr = self.uni_sock.recvfrom(2048)  # Buffer size 2048 bytes
-            messages=data.decode().strip().split("\n")
+            try:
+                data, addr = self.uni_sock.recvfrom(2048)  # Buffer size 2048 bytes
+                messages=data.decode().strip().split("\n")
+            except Exception as e:
+                error_details = traceback.format_exc()  # Get full traceback
+                self.log_event(f"Error while receiving message on unicast channel: {str(e)}")
+                self.log_event(f"Traceback: {error_details}")
             if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
                 for msg in messages:
                     try:
@@ -127,8 +133,14 @@ class IdentityLayer:
         self.log_event("Listening to multicast messages...") 
 
         while True:
-            data, addr = self.multi_sock.recvfrom(2048)
-            messages=data.decode().strip().split("\n")
+            try:
+                data, addr = self.multi_sock.recvfrom(2048)
+                messages=data.decode().strip().split("\n")
+            except Exception as e:
+                error_details = traceback.format_exc()  # Get full traceback
+                self.log_event(f"Error while receiving message on multicast channel: {str(e)}")
+                self.log_event(f"Traceback: {error_details}")
+                
             if 1 - random.random() > TEST_FAILED_RECEIEVE_CHANCE:
                 for msg in messages:
                     try:
